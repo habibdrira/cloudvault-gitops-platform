@@ -8,12 +8,12 @@ metadata:
     app.kubernetes.io/component: ui
     app.kubernetes.io/part-of: cloudvault-platform
 spec:
-  type: ClusterIP
+  type: NodePort
   ports:
     - name: http
       port: 3000
       targetPort: 3000
+      nodePort: 30000
       protocol: TCP
   selector:
     app.kubernetes.io/name: cloudvault-frontend
-
