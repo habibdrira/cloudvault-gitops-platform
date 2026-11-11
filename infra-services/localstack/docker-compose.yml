@@ -21,3 +21,4 @@ services:
     volumes:
       - /var/lib/localstack:/var/lib/localstack
       - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/localstack/init-scripts:/etc/localstack/init/ready.d

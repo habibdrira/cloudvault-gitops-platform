@@ -100,6 +100,22 @@
     state: directory
     mode: "0777"
 
+- name: "infra_services | Créer le répertoire des scripts d'initialisation LocalStack"
+  ansible.builtin.file:
+    path: "{{ localstack_dir }}/init-scripts"
+    state: directory
+    mode: "0755"
+    owner: ubuntu
+    group: ubuntu
+
+- name: "infra_services | Déployer le script d'initialisation S3 de LocalStack"
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../infra-services/localstack/init-scripts/init-s3.sh"
+    dest: "{{ localstack_dir }}/init-scripts/init-s3.sh"
+    mode: "0755"
+    owner: ubuntu
+    group: ubuntu
+
 - name: "infra_services | Déployer le fichier docker-compose.yml de LocalStack"
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../infra-services/localstack/docker-compose.yml"
