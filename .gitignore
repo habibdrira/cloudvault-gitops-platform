@@ -1,4 +1,47 @@
+# CloudVault GitOps Platform — Git Ignore
+# ============================================================================
+
+# Ansible
 *.retry
 *.log
-.DS_Store
+
+# Kubeconfig extrait dynamiquement (contient des credentials)
 kubeconfig
+
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Fichiers système
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Scratch / temporaires
+scratch/
+
+# Secrets (ne jamais committer)
+*.vault
+*-vault.yml
+.env
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+.env*.local
+
+# Go binaries
+apps/backend/cloudvault-backend

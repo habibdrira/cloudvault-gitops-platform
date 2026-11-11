@@ -1,0 +1,98 @@
+# ============================================================================
+# Rôle : k3s_server — Installation du Control Plane K3s
+# ============================================================================
+# Justification architecturale :
+#   Ce rôle installe K3s en mode "server" sur le Control Plane.
+#   Il constitue le cœur du cluster : API Server, Scheduler,
+#   Controller Manager, et stockage SQLite embarqué.
+#
+#   Points clés :
+#   - Flannel est lié à {{ flannel_iface }} (ens33/VMnet8) pour le routage
+#   - TLS SAN inclut l'IP du master pour l'accès distant kubectl
+#   - Le node-token est extrait comme fact pour le rôle k3s_agent
+#   - Le kubeconfig est rapatrié sur la station de contrôle WSL2
+#   - Idempotence : vérification par stat avant installation
+# ============================================================================
+
+---
+# -- 1. Vérification d'idempotence --------------------------------------------
+
+- name: "k3s_server | Vérifier si K3s est déjà installé"
+  ansible.builtin.stat:
+    path: /usr/local/bin/k3s
+  register: k3s_binary
+
+# -- 2. Installation K3s Server -----------------------------------------------
+
+- name: "k3s_server | Télécharger le script d'installation K3s"
+  ansible.builtin.get_url:
+    url: "{{ k3s_install_url }}"
+    dest: /tmp/k3s-install.sh
+    mode: "0755"
+  when: not k3s_binary.stat.exists
+
+- name: "k3s_server | Installer K3s Server (Control Plane)"
+  ansible.builtin.command:
+    cmd: /tmp/k3s-install.sh
+  environment:
+    INSTALL_K3S_CHANNEL: "{{ k3s_channel }}"
+    INSTALL_K3S_EXEC: >-
+      server
+      --flannel-iface={{ flannel_iface }}
+      --node-ip={{ ansible_host }}
+      --tls-san={{ ansible_host }}
+      --write-kubeconfig-mode=644
+      --disable=traefik
+  when: not k3s_binary.stat.exists
+  notify: Restart k3s
+
+# -- 3. Service K3s ------------------------------------------------------------
+
+- name: "k3s_server | Activer et démarrer le service K3s"
+  ansible.builtin.systemd:
+    name: k3s
+    state: started
+    enabled: true
+    daemon_reload: true
+
+# -- 4. Attente de disponibilité -----------------------------------------------
+
+- name: "k3s_server | Attendre que le Control Plane soit opérationnel"
+  ansible.builtin.command: /usr/local/bin/k3s kubectl get nodes
+  register: k3s_ready
+  until: k3s_ready.rc == 0
+  retries: 30
+  delay: 5
+  changed_when: false
+
+# -- 5. Extraction du node-token (pour k3s_agent) -----------------------------
+
+- name: "k3s_server | Lire le node-token du cluster"
+  ansible.builtin.slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: k3s_token_raw
+
+- name: "k3s_server | Exposer le node-token comme fact Ansible"
+  ansible.builtin.set_fact:
+    k3s_token: "{{ k3s_token_raw.content | b64decode | trim }}"
+
+# -- 6. Extraction et rapatriement du kubeconfig -------------------------------
+
+- name: "k3s_server | Lire le kubeconfig du serveur"
+  ansible.builtin.slurp:
+    src: /etc/rancher/k3s/k3s.yaml
+  register: k3s_kubeconfig_raw
+
+- name: "k3s_server | Ajuster l'adresse du serveur dans le kubeconfig"
+  ansible.builtin.set_fact:
+    k3s_kubeconfig_content: >-
+      {{ k3s_kubeconfig_raw.content | b64decode | replace('127.0.0.1', ansible_host) }}
+
+- name: "k3s_server | Déposer le kubeconfig sur la station de contrôle WSL2"
+  ansible.builtin.copy:
+    content: "{{ k3s_kubeconfig_content }}"
+    dest: "{{ kubeconfig_local_path }}"
+    mode: "0600"
+  delegate_to: localhost
+  become: false
+

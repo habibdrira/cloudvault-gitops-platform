@@ -1,0 +1,73 @@
+# ============================================================================
+# CloudVault — Playbook Orchestrateur Maître
+# ============================================================================
+# Ce playbook déploie l'intégralité de la plateforme CloudVault en séquence.
+# Chaque étape est tagguée pour permettre une exécution ciblée :
+#
+#   ansible-playbook site.yml                    # Tout déployer
+#   ansible-playbook site.yml --tags common      # Prérequis système seuls
+#   ansible-playbook site.yml --tags k3s         # Cluster K3s complet
+#   ansible-playbook site.yml --tags k3s_server  # Control Plane seul
+#   ansible-playbook site.yml --tags k3s_agent   # Workers seuls
+#   ansible-playbook site.yml --tags infra       # Services d'infrastructure
+#   ansible-playbook site.yml --tags argocd      # Bootstrap Argo CD
+#
+# Validation post-déploiement :
+#   KUBECONFIG=../kubeconfig kubectl get nodes -o wide
+# ============================================================================
+
+---
+# ===========================================================================
+# ÉTAPE 1 — Prérequis système sur tous les nœuds K8s
+# ===========================================================================
+- name: "Étape 1a — Préparer le socle système des nœuds Kubernetes"
+  hosts: k8s_cluster
+  become: true
+  gather_facts: true
+  tags: [common, k3s]
+  roles:
+    - role: common
+
+# ===========================================================================
+# ÉTAPE 1b — Déployer le Control Plane K3s (master)
+# ===========================================================================
+- name: "Étape 1b — Installer K3s Server sur le Control Plane"
+  hosts: k8s_master
+  become: true
+  gather_facts: false
+  tags: [k3s, k3s_server]
+  roles:
+    - role: k3s_server
+
+# ===========================================================================
+# ÉTAPE 1c — Rattacher les Workers au cluster K3s
+# ===========================================================================
+- name: "Étape 1c — Installer K3s Agent sur les nœuds Workers"
+  hosts: k8s_worker
+  become: true
+  gather_facts: false
+  tags: [k3s, k3s_agent]
+  roles:
+    - role: k3s_agent
+
+# ===========================================================================
+# ÉTAPE 2 — Services d'infrastructure (Docker + LocalStack Cloud Mocking)
+# ===========================================================================
+- name: "Étape 2 — Déployer les services d'infrastructure"
+  hosts: infra
+  become: true
+  gather_facts: true
+  tags: [infra, localstack]
+  roles:
+    - role: infra_services
+
+# ===========================================================================
+# ÉTAPE 3 — Bootstrap Argo CD (GitOps Controller)
+# ===========================================================================
+- name: "Étape 3 — Installer Argo CD dans le cluster K3s"
+  hosts: k8s_master
+  become: false
+  gather_facts: false
+  tags: [argocd, gitops]
+  roles:
+    - role: argocd

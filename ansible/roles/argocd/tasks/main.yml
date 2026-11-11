@@ -1,0 +1,84 @@
+# ============================================================================
+# Rôle : argocd — Bootstrap GitOps Controller
+# ============================================================================
+# Justification architecturale :
+#   Ce rôle déploie l'opérateur GitOps Argo CD sur le cluster K3s et configure
+#   le service Web en NodePort (port 30443) pour l'accès administratif.
+#
+# Idempotence :
+#   Utilise kubectl apply --server-side pour éviter la limitation de taille
+#   d'annotations client sur les CRDs volumineuses (applicationsets.argoproj.io).
+# ============================================================================
+
+---
+# -- 1. Namespace Argo CD -----------------------------------------------------
+
+- name: "argocd | Créer le namespace argocd"
+  ansible.builtin.command:
+    cmd: >-
+      kubectl --kubeconfig={{ kubeconfig_local_path }} apply -f
+      {{ playbook_dir }}/../bootstrap/argocd/namespace.yml
+  delegate_to: localhost
+  become: false
+  changed_when: false
+
+# -- 2. Installation officielle des manifests ---------------------------------
+
+- name: "argocd | Déployer les manifestes officiels Argo CD (Server-Side Apply)"
+  ansible.builtin.command:
+    cmd: >-
+      kubectl --kubeconfig={{ kubeconfig_local_path }} -n {{ argocd_namespace }}
+      apply --server-side --force-conflicts -f
+      {{ playbook_dir }}/../bootstrap/argocd/install.yaml
+  delegate_to: localhost
+  become: false
+  register: argocd_apply
+  changed_when: "'created' in argocd_apply.stdout"
+
+# -- 3. Configuration de l'exposition NodePort --------------------------------
+
+- name: "argocd | Configurer le service argocd-server en NodePort (:30443)"
+  ansible.builtin.command:
+    cmd: >-
+      kubectl --kubeconfig={{ kubeconfig_local_path }} -n {{ argocd_namespace }}
+      patch svc argocd-server --patch-file
+      {{ playbook_dir }}/../bootstrap/argocd/argocd-server-nodeport-patch.yml
+  delegate_to: localhost
+  become: false
+  register: patch_svc
+  changed_when: "'patched' in patch_svc.stdout and 'no change' not in patch_svc.stdout"
+
+# -- 4. Attente de disponibilité des composants -------------------------------
+
+- name: "argocd | Attendre la disponibilité du serveur Argo CD"
+  ansible.builtin.command:
+    cmd: >-
+      kubectl --kubeconfig={{ kubeconfig_local_path }} -n {{ argocd_namespace }}
+      rollout status deployment/argocd-server --timeout=120s
+  delegate_to: localhost
+  become: false
+  changed_when: false
+
+# -- 5. Extraction des credentials administratifs -----------------------------
+
+- name: "argocd | Récupérer le mot de passe initial de l'administrateur"
+  ansible.builtin.command:
+    cmd: >-
+      kubectl --kubeconfig={{ kubeconfig_local_path }} -n {{ argocd_namespace }}
+      get secret argocd-initial-admin-secret -o jsonpath='{.data.password}'
+  delegate_to: localhost
+  become: false
+  register: argocd_admin_secret
+  changed_when: false
+
+- name: "argocd | Définir le mot de passe admin décodé"
+  ansible.builtin.set_fact:
+    argocd_admin_password: "{{ argocd_admin_secret.stdout | b64decode }}"
+
+- name: "argocd | Afficher les informations d'accès Argo CD"
+  ansible.builtin.debug:
+    msg:
+      - "Argo CD UI : https://{{ hostvars[groups['k8s_worker'][0]]['ansible_host'] }}:30443"
+      - "Utilisateur : admin"
+      - "Mot de passe : {{ argocd_admin_password }}"
+

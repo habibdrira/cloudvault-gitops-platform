@@ -1,0 +1,14 @@
+# Handlers pour le rôle infra_services
+
+---
+- name: Restart docker
+  ansible.builtin.systemd:
+    name: docker
+    state: restarted
+    daemon_reload: true
+
+- name: Restart localstack
+  ansible.builtin.command:
+    cmd: docker compose -f /opt/localstack/docker-compose.yml restart
+  changed_when: true
+

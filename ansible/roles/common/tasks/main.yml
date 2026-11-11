@@ -1,0 +1,91 @@
+# ============================================================================
+# Rôle : common — Prérequis système pour nœuds Kubernetes
+# ============================================================================
+# Justification architecturale :
+#   Ce rôle prépare le socle OS requis par K3s sur chaque nœud du cluster.
+#   Il est idempotent : chaque tâche vérifie l'état avant d'agir.
+#
+#   1. Paquets système (curl, conntrack, socat…) → dépendances runtime K8s
+#   2. Modules noyau (br_netfilter, overlay) → routage inter-pods Flannel
+#   3. Paramètres sysctl (ip_forward, bridge-nf-call) → forwarding réseau
+#   4. Désactivation du swap → requis par kubelet (OOM-killer prévisible)
+# ============================================================================
+
+---
+# -- 1. Paquets système -------------------------------------------------------
+
+- name: "common | Mettre à jour le cache APT"
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  tags: [common, packages]
+
+- name: "common | Installer les paquets prérequis"
+  ansible.builtin.apt:
+    name: "{{ system_packages }}"
+    state: present
+  tags: [common, packages]
+
+# -- 2. Modules noyau ---------------------------------------------------------
+
+- name: "common | Charger les modules noyau requis"
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ kernel_modules }}"
+  tags: [common, kernel]
+
+- name: "common | Persister les modules noyau au boot"
+  ansible.builtin.lineinfile:
+    path: /etc/modules-load.d/k8s-modules.conf
+    line: "{{ item }}"
+    create: true
+    mode: "0644"
+  loop: "{{ kernel_modules }}"
+  tags: [common, kernel]
+
+# -- 3. Paramètres sysctl (routage réseau K8s) --------------------------------
+
+- name: "common | Appliquer les paramètres sysctl Kubernetes"
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_set: true
+    state: present
+    reload: true
+    sysctl_file: /etc/sysctl.d/99-kubernetes.conf
+  loop: "{{ sysctl_k8s_params | dict2items }}"
+  tags: [common, sysctl]
+
+# -- 4. Désactivation du swap -------------------------------------------------
+
+- name: "common | Vérifier si le swap est actif"
+  ansible.builtin.command: swapon --show --noheadings
+  register: swap_status
+  changed_when: false
+  failed_when: false
+  tags: [common, swap]
+
+- name: "common | Désactiver le swap immédiatement"
+  ansible.builtin.command: swapoff -a
+  when: swap_status.stdout | length > 0
+  tags: [common, swap]
+
+- name: "common | Supprimer le swap du fstab (persistance)"
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '\s+swap\s+'
+    state: absent
+  tags: [common, swap]
+
+# -- 5. Résolution DNS locale --------------------------------------------------
+
+- name: "common | Garantir la résolution DNS inter-nœuds"
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: ".*{{ hostvars[item]['ansible_host'] }}.*"
+    line: "{{ hostvars[item]['ansible_host'] }}  {{ item }}"
+    state: present
+  loop: "{{ groups['all'] }}"
+  tags: [common, dns]
+

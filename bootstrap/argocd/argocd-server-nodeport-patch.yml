@@ -1,0 +1,21 @@
+# ============================================================================
+# CloudVault — Argo CD Server Service NodePort Patch
+# ============================================================================
+# Expose argocd-server sur le port NodePort 30443 (HTTPS)
+# pour permettre l'accès Web direct depuis la machine hôte.
+# ============================================================================
+
+spec:
+  type: NodePort
+  ports:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8080
+      nodePort: 30080
+    - name: https
+      port: 443
+      protocol: TCP
+      targetPort: 8080
+      nodePort: 30443
+

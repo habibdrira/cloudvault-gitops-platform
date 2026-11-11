@@ -1,0 +1,44 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cloudvault-ingress
+  namespace: cloudvault
+  labels:
+    app.kubernetes.io/name: cloudvault-ingress
+    app.kubernetes.io/part-of: cloudvault-platform
+spec:
+  rules:
+    - host: cloudvault.local
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: cloudvault-backend
+                port:
+                  number: 8080
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: cloudvault-frontend
+                port:
+                  number: 3000
+    - http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: cloudvault-backend
+                port:
+                  number: 8080
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: cloudvault-frontend
+                port:
+                  number: 3000
+

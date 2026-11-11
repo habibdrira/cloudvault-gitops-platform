@@ -1,0 +1,70 @@
+# ============================================================================
+# CloudVault — Variables globales d'infrastructure
+# ============================================================================
+# Toutes les valeurs paramétrables du projet sont centralisées ici.
+# Aucune adresse IP ni interface réseau ne doit apparaître en dur dans
+# les tâches de rôles ; utiliser {{ ansible_host }} et ces variables.
+# ============================================================================
+
+---
+# ---------------------------------------------------------------------------
+# K3s — Distribution Kubernetes légère
+# ---------------------------------------------------------------------------
+k3s_channel: "stable"                        # Canal d'installation (stable, latest, v1.31)
+k3s_install_url: "https://get.k3s.io"        # URL officielle du script d'install K3s
+
+# Interface réseau physique pour Flannel (CNI overlay)
+# Flannel doit être lié à l'interface VMware VMnet8, pas à lo ou docker0
+flannel_iface: "ens33"
+
+# L'IP du Control Plane est résolue dynamiquement depuis l'inventaire
+# → hostvars[groups['k8s_master'][0]]['ansible_host']
+k3s_server_ip: "{{ hostvars[groups['k8s_master'][0]]['ansible_host'] }}"
+k3s_server_url: "https://{{ k3s_server_ip }}:6443"
+
+# Chemin local (station de contrôle WSL2) où le kubeconfig sera déposé
+kubeconfig_local_path: "{{ playbook_dir }}/../kubeconfig"
+
+# ---------------------------------------------------------------------------
+# Prérequis système — rôle common
+# ---------------------------------------------------------------------------
+system_packages:
+  - curl
+  - wget
+  - apt-transport-https
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - open-iscsi
+  - nfs-common
+  - jq
+  - unzip
+  - socat
+  - conntrack
+
+# Paramètres sysctl obligatoires pour le routage réseau Kubernetes
+sysctl_k8s_params:
+  net.ipv4.ip_forward: 1
+  net.bridge.bridge-nf-call-iptables: 1
+  net.bridge.bridge-nf-call-ip6tables: 1
+
+# Modules noyau requis avant K3s
+kernel_modules:
+  - br_netfilter
+  - overlay
+
+# ---------------------------------------------------------------------------
+# LocalStack — Services AWS mockés (Étape 2)
+# ---------------------------------------------------------------------------
+localstack_port: 4566
+localstack_services: "s3,iam,sts"
+localstack_dir: "/opt/localstack"
+localstack_data_dir: "/var/lib/localstack"
+localstack_host: "{{ hostvars[groups['infra'][0]]['ansible_host'] }}"
+localstack_endpoint: "http://{{ localstack_host }}:{{ localstack_port }}"
+
+# ---------------------------------------------------------------------------
+# Argo CD — GitOps Controller (Étape 3)
+# ---------------------------------------------------------------------------
+argocd_namespace: "argocd"
+argocd_version: "stable"

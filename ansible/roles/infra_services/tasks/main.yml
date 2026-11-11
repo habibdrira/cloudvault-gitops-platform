@@ -1,0 +1,131 @@
+# ============================================================================
+# Rôle : infra_services — Docker Engine & LocalStack (Cloud Mocking)
+# ============================================================================
+# Justification architecturale :
+#   Ce rôle déploie l'infrastructure de services partagés sur infra-node
+#   (192.168.100.10). Il configure Docker Engine et instancie le conteneur
+#   LocalStack pour exposer les API AWS mockées (S3, IAM, STS) au cluster K3s.
+#
+# Idempotence :
+#   Vérification préalable de la présence de Docker via ansible.builtin.stat
+#   pour éviter les opérations APT répétées.
+# ============================================================================
+
+---
+# -- 1. Vérification d'idempotence Docker -------------------------------------
+
+- name: "infra_services | Vérifier si Docker est déjà installé"
+  ansible.builtin.stat:
+    path: /usr/bin/docker
+  register: docker_binary
+
+# -- 2. Installation de Docker Engine -----------------------------------------
+
+- name: "infra_services | Installer les dépendances système pour Docker"
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: not docker_binary.stat.exists
+
+- name: "infra_services | Créer le répertoire pour les trousseaux de clés APT"
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+  when: not docker_binary.stat.exists
+
+- name: "infra_services | Télécharger la clé GPG officielle de Docker"
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+  when: not docker_binary.stat.exists
+
+- name: "infra_services | Ajouter le dépôt officiel Docker APT"
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/ubuntu
+      {{ ansible_distribution_release }} stable
+    state: present
+    filename: docker
+  when: not docker_binary.stat.exists
+
+- name: "infra_services | Installer Docker Engine et les plugins Compose"
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+    update_cache: true
+  when: not docker_binary.stat.exists
+  notify: Restart docker
+
+# -- 3. Configuration du service Docker et utilisateurs -----------------------
+
+- name: "infra_services | S'assurer que le service Docker est activé et démarré"
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: true
+
+- name: "infra_services | Ajouter l'utilisateur ubuntu au groupe docker"
+  ansible.builtin.user:
+    name: ubuntu
+    groups: docker
+    append: true
+
+# -- 4. Préparation de l'environnement LocalStack ----------------------------
+
+- name: "infra_services | Créer le répertoire de configuration LocalStack"
+  ansible.builtin.file:
+    path: "{{ localstack_dir }}"
+    state: directory
+    mode: "0755"
+    owner: ubuntu
+    group: ubuntu
+
+- name: "infra_services | Créer le répertoire de persistance des données LocalStack"
+  ansible.builtin.file:
+    path: "{{ localstack_data_dir }}"
+    state: directory
+    mode: "0777"
+
+- name: "infra_services | Déployer le fichier docker-compose.yml de LocalStack"
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../infra-services/localstack/docker-compose.yml"
+    dest: "{{ localstack_dir }}/docker-compose.yml"
+    mode: "0644"
+    owner: ubuntu
+    group: ubuntu
+  register: compose_file
+
+# -- 5. Lancement de LocalStack -----------------------------------------------
+
+- name: "infra_services | Démarrer le conteneur LocalStack via Docker Compose"
+  ansible.builtin.command:
+    cmd: docker compose up -d --remove-orphans
+    chdir: "{{ localstack_dir }}"
+  register: compose_up
+  changed_when: "'Started' in compose_up.stdout or 'Creating' in compose_up.stdout or 'Recreating' in compose_up.stdout"
+
+# -- 6. Attente de la disponibilité de l'API LocalStack -----------------------
+
+- name: "infra_services | Attendre que LocalStack Gateway (port 4566) soit disponible"
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ localstack_port }}/_localstack/health"
+    status_code: 200
+  register: localstack_health
+  until: localstack_health.status == 200
+  retries: 30
+  delay: 3
+  changed_when: false

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cloudvault
+  labels:
+    app.kubernetes.io/part-of: cloudvault-platform
+

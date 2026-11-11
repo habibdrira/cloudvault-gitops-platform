@@ -1,0 +1,23 @@
+# ============================================================================
+# CloudVault — LocalStack Infrastructure Mocking (Community Edition)
+# ============================================================================
+# LocalStack émule les services AWS (S3, IAM, STS) pour notre architecture.
+# Ce conteneur tourne sur infra-node (192.168.100.10) et expose le port 4566
+# à l'ensemble du réseau VMnet8 (K3s master, workers et station WSL).
+# ============================================================================
+
+services:
+  localstack:
+    container_name: localstack
+    image: localstack/localstack:3.8
+    restart: unless-stopped
+    ports:
+      - "4566:4566"            # LocalStack Gateway (S3, IAM, STS)
+      - "4510-4559:4510-4559"  # Plage de ports pour services externes
+    environment:
+      - SERVICES=s3,iam,sts
+      - AWS_DEFAULT_REGION=us-east-1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - /var/lib/localstack:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
