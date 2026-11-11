@@ -1,0 +1,134 @@
+"use client";
+
+import React from "react";
+import { FileText, Download, Trash2, RefreshCw } from "lucide-react";
+import { DocumentItem } from "../types/document";
+
+interface DocumentListProps {
+  documents: DocumentItem[];
+  loading: boolean;
+  onRefresh: () => void;
+  onDeleteClick: (doc: DocumentItem) => void;
+}
+
+export const DocumentList: React.FC<DocumentListProps> = ({
+  documents,
+  loading,
+  onRefresh,
+  onDeleteClick,
+}) => {
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return "0 Octet";
+    const k = 1024;
+    const sizes = ["Octets", "Ko", "Mo", "Go"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
+  const formatDate = (dateStr: string) => {
+    try {
+      return new Date(dateStr).toLocaleString("fr-FR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  return (
+    <div className="mt-10">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-slate-200 flex items-center gap-2">
+          <FileText className="w-5 h-5 text-cyan-400" />
+          Répertoire des documents sécurisés
+        </h2>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors disabled:opacity-50"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+          Actualiser
+        </button>
+      </div>
+
+      <div className="rounded-xl border border-slate-800 bg-slate-900/50 overflow-hidden shadow-lg">
+        {loading && documents.length === 0 ? (
+          <div className="p-10 text-center text-slate-500 text-sm flex items-center justify-center gap-2">
+            <RefreshCw className="w-4 h-4 animate-spin text-cyan-400" />
+            Chargement des documents depuis S3...
+          </div>
+        ) : documents.length === 0 ? (
+          <div className="p-10 text-center text-slate-500 text-sm">
+            Aucun document n'a encore été stocké dans le coffre-fort.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-800/50 text-slate-400 text-xs uppercase font-medium border-b border-slate-800">
+                <tr>
+                  <th className="px-6 py-3.5">Fichier</th>
+                  <th className="px-6 py-3.5">Taille</th>
+                  <th className="px-6 py-3.5">Date d'enregistrement</th>
+                  <th className="px-6 py-3.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {documents.map((doc) => (
+                  <tr
+                    key={doc.key}
+                    className="hover:bg-slate-800/30 transition-colors group"
+                  >
+                    <td className="px-6 py-4 font-medium text-slate-200 flex items-center gap-2.5">
+                      <FileText className="w-4 h-4 text-cyan-400/70 flex-shrink-0" />
+                      <span className="truncate max-w-xs md:max-w-md" title={doc.filename}>
+                        {doc.filename}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-slate-400 text-xs">
+                      {formatBytes(doc.size)}
+                    </td>
+                    <td className="px-6 py-4 text-slate-400 text-xs">
+                      {formatDate(doc.last_modified)}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        {/* Bouton Télécharger */}
+                        <a
+                          href={doc.download_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 text-xs font-medium transition-colors border border-cyan-500/20"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          Télécharger
+                        </a>
+
+                        {/* Bouton Supprimer */}
+                        <button
+                          type="button"
+                          onClick={() => onDeleteClick(doc)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-medium transition-colors border border-rose-500/20"
+                          title="Supprimer ce document"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Supprimer
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+

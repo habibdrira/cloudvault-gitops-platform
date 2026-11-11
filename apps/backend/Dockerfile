@@ -16,7 +16,7 @@ RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -trimpath \
     -ldflags="-w -s -extldflags '-static'" \
-    -o cloudvault-backend main.go
+    -o cloudvault-backend ./cmd/server
 
 # Stage 2 : Runtime Minimal Distroless
 FROM gcr.io/distroless/static-debian12:nonroot

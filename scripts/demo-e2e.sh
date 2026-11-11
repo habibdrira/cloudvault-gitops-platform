@@ -142,3 +142,4 @@ else
     echo -e "${RED}[ERREUR] Le document ${S3_OBJECT_KEY} n'a pas été retrouvé dans la liste S3.${RESET}"
     exit 1
 fi
+

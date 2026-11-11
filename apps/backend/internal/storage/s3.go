@@ -1,0 +1,145 @@
+package storage
+
+import (
+	"context"
+	"fmt"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+
+	"cloudvault-backend/internal/config"
+	"cloudvault-backend/internal/domain"
+)
+
+type S3Storage struct {
+	cfg           *config.Config
+	client        *s3.Client
+	presignClient *s3.PresignClient
+}
+
+func NewS3Storage(cfg *config.Config) (*S3Storage, error) {
+	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+		if cfg.EndpointURL != "" {
+			return aws.Endpoint{
+				URL:           cfg.EndpointURL,
+				SigningRegion: region,
+			}, nil
+		}
+		return aws.Endpoint{}, &aws.EndpointNotFoundError{}
+	})
+
+	awsCfg, err := awsconfig.LoadDefaultConfig(context.Background(),
+		awsconfig.WithRegion(cfg.AWSRegion),
+		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(cfg.AccessKey, cfg.SecretKey, "")),
+		awsconfig.WithEndpointResolverWithOptions(customResolver),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load AWS config: %w", err)
+	}
+
+	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+		o.UsePathStyle = true
+	})
+	presignClient := s3.NewPresignClient(client)
+
+	return &S3Storage{
+		cfg:           cfg,
+		client:        client,
+		presignClient: presignClient,
+	}, nil
+}
+
+func (s *S3Storage) CheckHealth(ctx context.Context) error {
+	_, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{
+		Bucket: aws.String(s.cfg.BucketName),
+	})
+	if err != nil {
+		_, listErr := s.client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
+			Bucket:  aws.String(s.cfg.BucketName),
+			MaxKeys: aws.Int32(1),
+		})
+		if listErr != nil {
+			return fmt.Errorf("bucket %s is not accessible: %w", s.cfg.BucketName, err)
+		}
+	}
+	return nil
+}
+
+func (s *S3Storage) GenerateUploadURL(ctx context.Context, objectKey string, contentType string) (string, error) {
+	presignedReq, err := s.presignClient.PresignPutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(s.cfg.BucketName),
+		Key:         aws.String(objectKey),
+		ContentType: aws.String(contentType),
+	}, func(opts *s3.PresignOptions) {
+		opts.Expires = 15 * time.Minute
+	})
+	if err != nil {
+		return "", fmt.Errorf("PresignPutObject error: %w", err)
+	}
+	return presignedReq.URL, nil
+}
+
+func (s *S3Storage) GenerateDownloadURL(ctx context.Context, objectKey string) (string, error) {
+	presignedReq, err := s.presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.cfg.BucketName),
+		Key:    aws.String(objectKey),
+	}, func(opts *s3.PresignOptions) {
+		opts.Expires = 60 * time.Minute
+	})
+	if err != nil {
+		return fmt.Sprintf("%s/%s/%s", s.cfg.EndpointURL, s.cfg.BucketName, objectKey), nil
+	}
+	return presignedReq.URL, nil
+}
+
+func (s *S3Storage) ListDocuments(ctx context.Context) ([]domain.DocumentItem, error) {
+	output, err := s.client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
+		Bucket: aws.String(s.cfg.BucketName),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("ListObjectsV2 error: %w", err)
+	}
+
+	var documents []domain.DocumentItem
+	for _, item := range output.Contents {
+		key := aws.ToString(item.Key)
+		parts := strings.SplitN(key, "_", 2)
+		origFilename := key
+		if len(parts) == 2 {
+			origFilename = parts[1]
+		}
+		origFilename = filepath.Base(origFilename)
+
+		downloadURL, _ := s.GenerateDownloadURL(ctx, key)
+
+		documents = append(documents, domain.DocumentItem{
+			Key:          key,
+			Filename:     origFilename,
+			Size:         aws.ToInt64(item.Size),
+			LastModified: aws.ToTime(item.LastModified),
+			DownloadURL:  downloadURL,
+		})
+	}
+
+	if documents == nil {
+		documents = []domain.DocumentItem{}
+	}
+	return documents, nil
+}
+
+func (s *S3Storage) DeleteDocument(ctx context.Context, objectKey string) error {
+	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(s.cfg.BucketName),
+		Key:    aws.String(objectKey),
+	})
+	if err != nil {
+		return fmt.Errorf("DeleteObject error for key %s: %w", objectKey, err)
+	}
+	return nil
+}
+

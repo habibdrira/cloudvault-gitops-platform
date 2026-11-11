@@ -189,3 +189,4 @@ cloudvault-gitops-platform/
 
 ## 📜 Licence
 Ce projet est sous licence open-source **[MIT](LICENSE)**. Conçu avec rigueur pour illustrer les meilleures pratiques de l'ingénierie Cloud, DevOps et SRE moderne.
+
