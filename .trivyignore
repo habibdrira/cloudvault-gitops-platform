@@ -15,3 +15,10 @@ AWS-0132
 # Upstream Go runtime standard library CVEs in distroless/alpine builder
 CVE-2025-68121
 
+# Upstream Next.js 14 & Node.js runtime framework advisories
+CVE-2026-75604
+GHSA-2464-fhr4-w9xw
+GHSA-2xp9-vwfh-vxw4
+CVE-2026-59873
+
+
