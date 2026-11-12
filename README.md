@@ -1,16 +1,19 @@
 # CloudVault GitOps Platform 🛡️🚀
 
+[![CloudVault CI](https://github.com/habibdrira/cloudvault-gitops-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/habibdrira/cloudvault-gitops-platform/actions/workflows/ci.yml)
 [![Kubernetes K3s](https://img.shields.io/badge/Kubernetes-K3s%20v1.31-326CE5?logo=kubernetes&logoColor=white)](https://k3s.io)
 [![GitOps ArgoCD](https://img.shields.io/badge/GitOps-Argo%20CD%20v2.12-EF6B48?logo=argo&logoColor=white)](https://argoproj.github.io/cd/)
+[![Prometheus](https://img.shields.io/badge/Monitoring-Prometheus%20v2.55-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io)
+[![Grafana](https://img.shields.io/badge/Dashboard-Grafana%20v11.3-F46800?logo=grafana&logoColor=white)](https://grafana.com)
 [![Terraform](https://img.shields.io/badge/IaC-Terraform%20v1.9-844FBA?logo=terraform&logoColor=white)](https://terraform.io)
 [![Ansible](https://img.shields.io/badge/Automation-Ansible%20Core-EE0000?logo=ansible&logoColor=white)](https://ansible.com)
 [![LocalStack S3](https://img.shields.io/badge/AWS%20Mock-LocalStack%203.8-0052CC?logo=amazons3&logoColor=white)](https://localstack.cloud)
-[![Go Backend](https://img.shields.io/badge/Backend-Go%201.23%20Distroless-00ADD8?logo=go&logoColor=white)](https://golang.org)
-[![Next.js Frontend](https://img.shields.io/badge/Frontend-Next.js%2015%20Standalone-000000?logo=nextdotjs&logoColor=white)](https://nextjs.org)
+[![Go Backend](https://img.shields.io/badge/Backend-Go%201.23%20Clean%20Arch-00ADD8?logo=go&logoColor=white)](https://golang.org)
+[![Next.js Frontend](https://img.shields.io/badge/Frontend-Next.js%2014%20Modular-000000?logo=nextdotjs&logoColor=white)](https://nextjs.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > **CloudVault** est une plateforme documentaire d'entreprise moderne, hautement disponible et orchestrée selon les principes **GitOps & SRE de bout en bout**.  
-> Elle associe l'automatisation de l'infrastructure déclarative (**Ansible** & **Terraform**), un cluster **Kubernetes K3s** multi-nœuds, la réconciliation continue par **Argo CD**, un stockage objet mocké **AWS S3 (LocalStack)** et une architecture microservices ultra-légère en conteneurs **Distroless non-root**.
+> Elle associe l'automatisation d'infrastructure déclarative (**Ansible** & **Terraform**), un cluster **Kubernetes K3s** multi-nœuds, la réconciliation continue par **Argo CD**, une pile d'observabilité complète (**kube-prometheus-stack** & **Grafana** auto-provisionné), un stockage objet mocké **AWS S3 (LocalStack)** et une architecture microservices ultra-légère en conteneurs **Distroless non-root**.
 
 ---
 
@@ -24,13 +27,13 @@ L'infrastructure s'étend sur un réseau virtuel privé dédié (`VMnet8 : 192.1
                                   |   Ansible | Terraform | Kubectl       |
                                   +-------------------+-------------------+
                                                       |
-                          DNS: cloudvault.local:80    | Git Commit & Push
+                          DNS: cloudvault.local:80    | Git Commit & Push (GitHub Actions CI)
                                                       v
   ===================================== VMnet8 (192.168.100.0/24) =====================================
                                                       |
             +-----------------------------------------+-----------------------------------------+
             |                                         |                                         |
-            v (HTTP Host: cloudvault.local)           v (Cluster Internal)                      v (Cloud Mocking)
+            v (HTTP Host: cloudvault.local)           v (Cluster Internal / NodePort 30300)     v (Cloud Mocking)
 +-----------------------------------+   +-----------------------------------+   +-----------------------------------+
 |            k8s-master             |   |            k8s-worker             |   |            infra-node             |
 |         (192.168.100.20)          |   |         (192.168.100.21)          |   |         (192.168.100.10)          |
@@ -38,25 +41,126 @@ L'infrastructure s'étend sur un réseau virtuel privé dédié (`VMnet8 : 192.1
 |  [Ingress NGINX] (HostNetwork:80) |   |  [Ingress NGINX] (HostNetwork:80) |   |  [Docker Engine 27+]              |
 |  - Ingress Controller             |   |  - Ingress Controller             |   |                                   |
 |                                   |   |                                   |   |  [LocalStack Container 3.8]       |
-|  [Control Plane K3s]              |   |  [Worker Node K3s]                |   |  - Gateway Port: 4566             |
+|  [Control Plane K3s Server]       |   |  [Worker Node K3s Agent]          |   |  - Gateway Port: 4566             |
 |  - CoreDNS, Metrics Server        |   |                                   |   |  - Services: S3, IAM, STS         |
-|  - Local-Path Provisioner         |   |  [Application Pods - Namespace:   |   |  - Bucket: cloudvault-documents   |
-|                                   |   |                  cloudvault]      |   |                                   |
-|  [Argo CD GitOps Engine]          |   |  * cloudvault-backend (Go)        |   |  [Boot Hook Persistence]          |
-|  - Application Controller         |   |    Port 8080 (NodePort: 30081)    |   |  - /etc/localstack/init/ready.d/  |
+|  - Local-Path Provisioner         |   |  [Application Pods (cloudvault)]  |   |  - Bucket: cloudvault-documents   |
+|                                   |   |  * cloudvault-backend (Go 1.23)   |   |                                   |
+|  [Argo CD GitOps Engine]          |   |    Port 8080 (NodePort: 30081)    |   |  [Boot Hook Persistence]          |
+|  - Application Controller         |   |    Clean Arch / slog JSON         |   |  - /etc/localstack/init/ready.d/  |
 |  - Repo Server & API Server       |   |  * cloudvault-frontend (Next.js)  |   |    init-s3.sh (auto-recreate)     |
-|  - Self-Heal & Auto-Prune Loop    |   |    Port 3000 (NodePort: 30000)    |   +-----------------------------------+
-+-----------------------------------+   +-----------------------------------+                     ^
+|  - 4 Applications Synced          |   |    Port 3000 (NodePort: 30000)    |   +-----------------------------------+
+|                                   |   |                                   |                     ^
+|  [Observabilité (monitoring)]     |   |  [Observabilité (monitoring)]     |                     |
+|  * Prometheus Server (2.55)       |   |  * Grafana v11.3 (NodePort:30300) |                     |
+|  * Prometheus Operator (0.78)     |   |    Dashboard SRE auto-chargé      |                     |
+|  * Kube-State-Metrics (2.13)      |   |  * Node Exporter (DaemonSet)      |                     |
+|  * Node Exporter (DaemonSet)      |   |                                   |                     |
++-----------------------------------+   +-----------------------------------+                     |
                   |                                       |                                       |
                   |                                       +--- Demande URL pré-signée S3 -------->|
                   +--- Réconciliation continue GitOps --->|    Direct PUT Client -> S3 -----------+
 ```
 
-### ⚡ Flux d'Upload Sécurisé (Pre-signed S3 URL Pattern)
-1. **Requête Client :** Le navigateur ou le client adresse un `POST /api/v1/documents/upload-url` avec le nom du fichier vers `cloudvault.local:80` (Ingress NGINX).
-2. **Génération d'URL :** Le backend Go génère une URL pré-signée cryptographiquement via AWS SDK v2 (`s3.PresignPutObject`) avec une validité de 15 minutes.
-3. **Upload Direct :** Le client effectue un `PUT` HTTP direct vers LocalStack S3 (`http://192.168.100.10:4566/cloudvault-documents/...`), **déchargeant à 100 % la bande passante du cluster Kubernetes**.
-4. **Indexation & Consultation :** Un `GET /api/v1/documents` renvoie la liste horodatée des objets S3 avec leurs métadonnées et URLs de téléchargement sécurisées.
+---
+
+## 🔄 Les 4 Piliers GitOps (Argo CD Applications)
+
+L'intégralité de la plateforme est orchestrée de manière 100 % déclarative via 4 applications Argo CD :
+
+| Application Argo CD | Namespace Cible | Source / Path | Description |
+| :--- | :---: | :--- | :--- |
+| **`cloudvault-platform`** | `cloudvault` | `k8s/apps` (recurse) | Microservices backend Go, frontend Next.js, services, Ingress et `ServiceMonitor`. |
+| **`ingress-controller`** | `ingress-nginx` | `k8s/infrastructure/ingress-controller` | Ingress NGINX DaemonSet exposé sur le port hôte 80 avec classe `nginx`. |
+| **`monitoring-stack`** | `monitoring` | Helm `kube-prometheus-stack` (v65.8.1) | Opérateur Prometheus, Prometheus Server, Kube-State-Metrics, Node Exporter et Grafana. |
+| **`monitoring-dashboards`** | `monitoring` | `k8s/monitoring/dashboards` | ConfigMaps des Dashboards Grafana auto-découvertes et montées via sidecar. |
+
+```text
+$ kubectl --kubeconfig=./kubeconfig -n argocd get applications
+NAME                    SYNC STATUS   HEALTH STATUS
+cloudvault-platform     Synced        Healthy
+ingress-controller      Synced        Healthy
+monitoring-dashboards   Synced        Healthy
+monitoring-stack        Synced        Healthy
+```
+
+---
+
+## 📈 Observabilité & Golden Signals (Prometheus / Grafana)
+
+La plateforme intègre une stack d'observabilité de classe entreprise basée sur **Prometheus**, **Prometheus Operator** et **Grafana**, configurée pour un environnement de laboratoire sobre en ressources (Alertmanager désactivé, rétention 24h).
+
+### 1. Collecte Déclarative via ServiceMonitor
+Un manifest [`k8s/apps/servicemonitor.yaml`](k8s/apps/servicemonitor.yaml) cible le service `cloudvault-backend` et collecte les métriques toutes les 15 secondes sur le port `http` (`:8080/metrics`). Les 2 réplicas backend sont audités à l'état `UP`.
+
+### 2. Métriques SRE Instrumentées (Golden Signals)
+Le backend Go implémente nativement les métriques Prometheus suivantes (`internal/metrics/`) :
+* `cloudvault_http_requests_total` (`CounterVec`) : Nombre total de requêtes HTTP ventilées par `method`, `path` (normalisé sans explosion de cardinalité) et `status`.
+* `cloudvault_http_request_duration_seconds` (`HistogramVec`) : Latence des requêtes avec 9 buckets d'observation (`5ms`, `10ms`, `25ms`, `50ms`, `100ms`, `250ms`, `500ms`, `1s`, `2.5s`).
+* `cloudvault_s3_operation_duration_seconds` (`HistogramVec`) : Durée des opérations S3 LocalStack par opération (`presign_put`, `list_objects`, `delete_object`).
+* `cloudvault_s3_operations_total` (`CounterVec`) : Compteur des opérations S3 par opération et statut (`success`, `error`).
+
+### 3. Dashboard Grafana Déclaratif Auto-Provisionné
+Grafana est exposé sur le NodePort **`30300`** (`http://192.168.100.21:30300`, login : `admin` / `admin`).  
+Le dashboard `"CloudVault Platform - Performance & SRE Golden Signals"` ([`grafana-dashboard-cloudvault.yaml`](k8s/monitoring/dashboards/grafana-dashboard-cloudvault.yaml)) est détecté et monté automatiquement par le sidecar `k8s-sidecar` grâce au label `grafana_dashboard: "1"` :
+
+1. **Taux de Requêtes par Seconde (RPS) :** Débit en temps réel ventilé par codes HTTP 2xx (vert), 4xx (orange), et 5xx (rouge).
+2. **Latence HTTP (Golden Signals) :** Percentiles P95 et P99 calculés via `histogram_quantile`.
+3. **Durée des Opérations S3 LocalStack :** Latence P95 des interactions avec le bucket (`presign_put`, `list_objects`, `delete_object`).
+4. **Empreinte Pods Backend Go :** Consommation CPU (`container_cpu_usage_seconds_total`) et RAM (`container_memory_working_set_bytes`) en temps réel.
+
+---
+
+## 🛠️ Architecture Logicielle & Cycle CRUD Sécurisé
+
+### 1. Clean Architecture Backend Go (`apps/backend/`)
+Le backend a été restructuré selon les standards CNCF :
+```text
+apps/backend/
+├── cmd/server/main.go              # Point d'entrée, injection des dépendances, Graceful Shutdown (10s)
+├── internal/
+│   ├── config/config.go           # Configuration via variables d'environnement & whitelist MIME
+│   ├── domain/document.go         # Entités métier & interface mockable DocumentStorage
+│   ├── storage/s3.go              # Implémentation S3 AWS SDK v2 & mesure des latences
+│   ├── handlers/                  # Handlers HTTP purs (net/http)
+│   │   ├── document_handler.go    # Génération upload-url, inventaire et suppression DELETE
+│   │   ├── health_handler.go      # Sondes Kubernetes /healthz et /readyz (check S3 réel)
+│   │   └── document_handler_test.go # Tests unitaires mockés (100 % passants)
+│   ├── middleware/                # Logging JSON slog, métriques Prometheus & CORS
+│   └── metrics/metrics.go         # Définition des collecteurs Prometheus
+```
+
+### 2. Validation MIME Stricte & Cycle CRUD Complet
+* **Validation MIME Stricte :** Tout fichier téléversé fait l'objet d'un contrôle strict de type MIME (`application/pdf`, `image/png`, `image/jpeg`, `text/plain`, `application/json`). Tout fichier exécutable ou non autorisé (ex: `.exe`, `application/x-msdownload`) est immédiatement rejeté avec le code **HTTP 400** (`INVALID_MIME_TYPE`).
+* **Cycle CRUD Complet :**
+  1. `POST /api/v1/documents/upload-url` : Allocation d'URL pré-signée S3.
+  2. `PUT` direct vers S3 LocalStack (`cloudvault-documents`).
+  3. `GET /api/v1/documents` : Liste horodatée des documents indexés.
+  4. `DELETE /api/v1/documents/{key}` : Suppression physique irréversible de l'objet dans S3 LocalStack avec code HTTP 200.
+* **Logging Structuré `log/slog` :** Toutes les requêtes sont tracées en JSON standardisé (`method`, `path`, `status`, `duration_ms`, `remote_addr`, `bytes_written`, `user_agent`).
+* **Graceful Shutdown :** Écoute des signaux `SIGINT`/`SIGTERM` via `signal.NotifyContext` garantissant l'extinction propre et la vidange des connexions actives sous un délai de grâce de 10 secondes.
+
+### 3. Frontend Next.js Modulaire (`apps/frontend/`)
+* **Composants Découplés (`src/components/`) :** `UploadDropzone.tsx`, `DocumentList.tsx`, `DeleteModal.tsx`, `ProgressBar.tsx`.
+* **Jauge de Progression Réelle XHR :** L'upload direct vers S3 utilise l'événement `xhr.upload.onprogress` de l'API `XMLHttpRequest`, offrant une jauge de progression réelle et continue de 0 % à 100 %.
+* **Modale de Confirmation :** Protection contre les suppressions accidentelles avec modale interactive avant l'appel `DELETE`.
+
+---
+
+## ⚙️ Pipeline d'Intégration Continue (GitHub Actions CI)
+
+Le fichier [`.github/workflows/ci.yml`](.github/workflows/ci.yml) automatise l'assurance qualité à chaque push et pull request sur la branche `main` :
+
+1. **Job `backend-ci` (Go 1.23) :**
+   - Vérification des modules Go (`go mod verify`).
+   - Analyse statique (`go vet ./...`).
+   - Exécution des tests avec race detector et profilage de couverture : `go test -v -race -cover ./...`.
+2. **Job `frontend-ci` (Node.js 20) :**
+   - Installation reproductible des dépendances : `npm ci`.
+   - Contrôle strict des types TypeScript : `npx tsc --noEmit`.
+   - Validation du lint Next.js et compilation de production : `npm run build`.
+3. **Job `iac-k8s-ci` :**
+   - Contrôle de formatage et validation Terraform : `terraform fmt -check`, `terraform validate`.
+   - Contrôle syntaxique récursif des manifests YAML Kubernetes via script automatisé.
 
 ---
 
@@ -66,29 +170,12 @@ Mesures auditées en conditions réelles sur le cluster :
 
 | Composant | Image Docker / Base | Taille Image | RAM Runtime (Pod) | Sécurité Conteneur |
 | :--- | :--- | :---: | :---: | :--- |
-| **Backend API (Go 1.23)** | `gcr.io/distroless/static:nonroot` | **4.1 MiB** | **~3 MiB** | UID `65532` non-root, aucun shell, statique |
-| **Frontend UI (Next.js 15)** | `node:20-alpine` (Standalone) | **50.4 MiB** | **~25 MiB** | UID `1001` (`nextjs`), non-root, cache optimisé |
+| **Backend API (Go 1.23)** | `gcr.io/distroless/static:nonroot` | **12.5 MiB** | **~5 MiB** | UID `65532` non-root, aucun shell, statique |
+| **Frontend UI (Next.js 14)** | `node:20-alpine` (Standalone) | **50.4 MiB** | **~25 MiB** | UID `1001` (`nextjs`), non-root, cache optimisé |
+| **Prometheus Server (v2.55)** | `quay.io/prometheus/prometheus` | Standard | **~250 MiB** | Rétention 24h, scrape interval 15s |
+| **Grafana UI (v11.3)** | `docker.io/grafana/grafana` | Standard | **~90 MiB** | NodePort 30300, sidecar auto-provisioning |
 | **Cluster Orchestration** | K3s Light Kubernetes | — | < 500 MiB / nœud | SQLite interne, Flannel VXLAN, HostNetwork NGINX |
-| **Boucle GitOps (Argo CD)** | `selfHeal: true` | — | **~52 ms** | Correction instantanée de toute dérive manuelle |
-| **Résilience Pod Failover** | K8s ReplicaSet | — | **< 15 s** | Recréation et passage à `1/1 Ready` après crash |
-
----
-
-## 🔒 Standards de Sécurité & Ingénierie SRE
-
-* **Idempotence & IaC Déclarative :** L'intégralité du système est déployé par playbook **Ansible** (`site.yml`) et **Terraform** (`main.tf`). Aucune configuration manuelle n'est tolérée.
-* **Architecture Zero-Trust :**
-  * Les conteneurs applicatifs s'exécutent avec des utilisateurs non privilégiés (UID `65532` et `1001`).
-  * Les secrets et variables d'environnement (`AWS_ACCESS_KEY_ID`, `AWS_ENDPOINT_URL`) sont injectés de façon déclarative sans privilèges racine.
-* **Auto-Guérison GitOps (Self-Healing) :**
-  * Argo CD surveille le dépôt Git `main`.
-  * Toute altération manuelle (ex: `kubectl scale --replicas=4`) est immédiatement détectée (`OutOfSync`) et réconciliée (`Synced`, 2 répliques) en moins d'une seconde.
-* **Résilience au Redémarrage à Froid (Boot Hook Persistence) :**
-  * Les conteneurs LocalStack Community perdent classiquement leur état S3 en RAM au reboot.
-  * CloudVault intègre un hook d'amorçage monté sur `/etc/localstack/init/ready.d/init-s3.sh`. Au démarrage du démon Docker sur `infra-node`, le bucket `cloudvault-documents` est auto-initialisé instantanément.
-* **Sondes Kubernetes Haute Précision :**
-  * `/healthz` : Sonde de vivacité (Liveness).
-  * `/readyz` : Sonde de préparation (Readiness) qui teste activement la connectivité réelle au bucket S3 via `s3:HeadBucket`.
+| **Boucle GitOps (Argo CD)** | `selfHeal: true` | — | **~52 ms** | Correction instantanée de toute dérive déclarée |
 
 ---
 
@@ -96,69 +183,65 @@ Mesures auditées en conditions réelles sur le cluster :
 
 ### Prérequis
 - 3 machines virtuelles Ubuntu 22.04 LTS configurées sur `192.168.100.10`, `192.168.100.20`, `192.168.100.21` avec accès SSH sans mot de passe pour l'utilisateur `ubuntu`.
-- Station de contrôle WSL2 avec `ansible`, `terraform`, `kubectl` et `curl`.
+- Station de contrôle WSL2 avec `ansible`, `terraform`, `kubectl`, `python3` et `curl`.
 
 ### Étape 1 : Déploiement du Socle Système & Cluster (Ansible)
-Depuis la racine du dépôt :
 ```bash
 ansible-playbook -i ansible/inventory/hosts.ini ansible/site.yml
 ```
-*Configure Docker & LocalStack sur `infra-node`, installe K3s Server sur `k8s-master`, K3s Agent sur `k8s-worker`, déploie Argo CD et extrait le `kubeconfig` local.*
 
 ### Étape 2 : Déploiement Déclaratif du Stockage Cloud (Terraform)
 ```bash
 cd infra-services/terraform
-terraform init
-terraform apply -auto-approve
+terraform init && terraform apply -auto-approve
 cd ../..
 ```
-*Provisionne le bucket S3 `cloudvault-documents`, les restrictions publiques et le rôle IAM avec ses politiques de lecture/écriture.*
 
-### Étape 3 : Bootstrap de l'Application GitOps (Argo CD)
+### Étape 3 : Bootstrap des Applications GitOps (Argo CD)
 ```bash
+# 1. Déploiement de l'Ingress NGINX
+kubectl --kubeconfig=./kubeconfig apply -f k8s/infrastructure/ingress-controller-app.yaml
+
+# 2. Déploiement de la stack d'observabilité Prometheus / Grafana
+kubectl --kubeconfig=./kubeconfig apply -f k8s/infrastructure/monitoring/monitoring-stack.yaml
+
+# 3. Déploiement des Dashboards Grafana déclaratifs
+kubectl --kubeconfig=./kubeconfig apply -f k8s/infrastructure/monitoring/monitoring-dashboards-app.yaml
+
+# 4. Déploiement des microservices CloudVault
 kubectl --kubeconfig=./kubeconfig apply -f k8s/root-application.yaml
 ```
-*Argo CD prend le relais, synchronise les déploiements backend, frontend et l'Ingress NGINX. L'application devient `Healthy` automatiquement.*
 
 ---
 
-## 🧪 Validation Automatisée de Bout en Bout (E2E Demo)
+## 🧪 Tests & Validation Automatisée
 
-Le dépôt inclut un script de test exhaustif qui valide la plateforme en une seule commande :
+Le dépôt inclut 2 suites de validation automatisées exécutables en une commande :
 
 ```bash
+# 1. Validation E2E complète (Sondes, URLs pré-signées, upload S3, routage Ingress)
 ./scripts/demo-e2e.sh
+
+# 2. Validation CRUD complète & protection stricte contre malware MIME
+python3 tests/test_crud_complete.py
+
+# 3. Audit en direct de la stack d'observabilité (Prometheus & Grafana)
+python3 tests/verify_observability.py
 ```
 
-### Extrait de la sortie d'exécution :
-```text
-=====================================================================
-   CloudVault GitOps Platform — Automated E2E Validation Pipeline    
-=====================================================================
-Target Ingress Host  : cloudvault.local (192.168.100.21:80)
-Backend Direct Probe : 192.168.100.21:30081
-Target Test Document : demo-proof.txt
+---
 
-[Étape 1/4] Validation des sondes de santé Backend K8s (/healthz, /readyz)...
-  ✔ Liveness Probe  (/healthz) : HTTP 200 OK
-  ✔ Readiness Probe (/readyz)  : HTTP 200 OK (Connexion S3 vérifiée)
+## 🌐 Points d'Accès de la Plateforme
 
-[Étape 2/4] Demande d'URL pré-signée S3 via POST /api/v1/documents/upload-url...
-  ✔ Ingress Routing     : HTTP 201 Created
-  ✔ Clé S3 allouée      : 1794428012_demo-proof.txt
-  ✔ URL pré-signée S3   : http://192.168.100.10:4566/cloudvault-documents/1794428012_demo-proof.txt?...
-
-[Étape 3/4] Téléversement direct sécurisé (HTTP PUT) vers S3 LocalStack...
-  ✔ Téléversement S3    : HTTP 200 OK (Stocké dans 'cloudvault-documents')
-
-[Étape 4/4] Interrogation de l'inventaire via GET /api/v1/documents...
-  ✔ Réponse API Ingress : HTTP 200 OK
-  Total documents indexés : 1
-
-=====================================================================
-  VALIDATION E2E RÉUSSIE AVEC SUCCÈS ! LA PLATEFORME EST CONFORME    
-=====================================================================
-```
+| Service | URL / Port | Protocole / Auth |
+| :--- | :--- | :--- |
+| **Application Web CloudVault** | `http://cloudvault.local/` (192.168.100.21:80) | HTTP Ingress NGINX |
+| **Grafana UI & Dashboards** | `http://192.168.100.21:30300` | NodePort / `admin` : `admin` |
+| **Dashboard SRE Golden Signals** | `http://192.168.100.21:30300/d/cloudvault-sre-golden-signals` | Direct Dashboard Link |
+| **Prometheus API** | `http://10.43.65.84:9090` | ClusterIP Interne |
+| **Backend Raw Metrics** | `http://192.168.100.21:30081/metrics` | NodePort format Prometheus |
+| **Argo CD UI** | `https://192.168.100.20:30443` | NodePort HTTPS |
+| **LocalStack S3 Gateway** | `http://192.168.100.10:4566` | REST API AWS S3 |
 
 ---
 
@@ -166,27 +249,37 @@ Target Test Document : demo-proof.txt
 
 ```text
 cloudvault-gitops-platform/
-├── ansible/                  # Automatisation Ansible multi-nœuds
-│   ├── inventory/            # Inventaire dynamique et group_vars (all.yml)
-│   ├── roles/                # Rôles : common, infra_services, k3s_server, k3s_agent, argocd
-│   └── site.yml              # Playbook maître d'orchestration
-├── apps/                     # Code source des microservices
-│   ├── backend/              # Microservice Go (Presigned URLs, S3 SDK v2, Distroless)
-│   └── frontend/             # Interface Next.js 15 (Tailwind, Lucide, Standalone)
-├── infra-services/           # Services d'infrastructure partagée
-│   ├── localstack/           # Docker Compose & scripts de boot hook (/etc/localstack/init/ready.d)
+├── .github/
+│   └── workflows/
+│       └── ci.yml            # Pipeline CI/CD automatisé (Backend, Frontend, IaC/K8s)
+├── ansible/                  # Automatisation Ansible multi-nœuds (K3s, Docker, Argo CD)
+├── apps/
+│   ├── backend/              # Microservice Go 1.23 (Clean Arch, slog, Prometheus, Distroless)
+│   │   ├── cmd/server/       # Point d'entrée du serveur HTTP
+│   │   └── internal/         # Packages config, domain, storage, handlers, middleware, metrics
+│   └── frontend/             # Application Next.js 14 (Composants modulaires, XHR Progress)
+│       └── src/
+│           ├── components/   # UploadDropzone, DocumentList, DeleteModal, ProgressBar
+│           └── types/        # Types TypeScript
+├── infra-services/
+│   ├── localstack/           # Docker Compose & boot hook persistant init-s3.sh
 │   └── terraform/            # Configuration déclarative S3 & IAM
-├── k8s/                      # Manifestes Kubernetes gérés par Argo CD
-│   ├── apps/                 # Déploiements backend, frontend, services & Ingress NGINX
-│   ├── infrastructure/       # Contrôleur Ingress NGINX DaemonSet & Application GitOps
-│   └── root-application.yaml # Application parente Argo CD (App-of-Apps pattern)
-├── scripts/                  # Scripts utilitaires & validation
-│   └── demo-e2e.sh           # Pipeline de démonstration E2E automatisé
-└── tests/                    # Tests d'intégration automatisés
+├── k8s/                      # Manifestes Kubernetes déclaratifs gérés par Argo CD
+│   ├── apps/                 # Déploiements backend, frontend, Ingress et ServiceMonitor
+│   ├── infrastructure/       # Ingress NGINX et Applications Argo CD monitoring
+│   │   └── monitoring/       # monitoring-stack.yaml et monitoring-dashboards-app.yaml
+│   ├── monitoring/
+│   │   └── dashboards/       # ConfigMap Grafana Dashboard Golden Signals
+│   └── root-application.yaml # Application Argo CD principale (cloudvault-platform)
+├── scripts/                  # Scripts de démonstration et validation E2E
+│   └── demo-e2e.sh
+└── tests/                    # Suites de tests automatisés Python et Bash
+    ├── test_crud_complete.py # Validation CRUD DELETE et protection MIME
+    ├── verify_observability.py # Audit API Grafana et Prometheus
+    └── validate_k8s_yaml.py  # Contrôleur syntaxique YAML des manifests
 ```
 
 ---
 
 ## 📜 Licence
 Ce projet est sous licence open-source **[MIT](LICENSE)**. Conçu avec rigueur pour illustrer les meilleures pratiques de l'ingénierie Cloud, DevOps et SRE moderne.
-
