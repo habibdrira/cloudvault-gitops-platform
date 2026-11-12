@@ -9,9 +9,11 @@
 kubeconfig
 
 # Terraform
+.terraform/
 **/.terraform/*
 *.tfstate
 *.tfstate.*
+*.tfstate*
 crash.log
 crash.*.log
 *.tfvars

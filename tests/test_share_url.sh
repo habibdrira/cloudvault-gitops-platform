@@ -23,3 +23,4 @@ echo "=== Test GET Download via Share URL ==="
 DOWNLOAD_CONTENT=$(curl -s "${SHARE_URL}")
 echo "Downloaded Content:"
 echo "${DOWNLOAD_CONTENT}"
+

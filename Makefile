@@ -20,16 +20,16 @@ help:
 
 bootstrap:
 	ansible-playbook ansible/site.yml
+	$(MAKE) tf-apply
 
 tf-apply:
-	@which rsync >/dev/null 2>&1 && rsync -az infra-services/terraform/ ubuntu@192.168.100.10:/home/habib/cloudvault-gitops-platform/infra-services/terraform/ 2>/dev/null || true
-	docker run --rm -v $(PWD)/infra-services/terraform:/workspace -w /workspace --network host hashicorp/terraform:1.9 init
-	docker run --rm -v $(PWD)/infra-services/terraform:/workspace -w /workspace --network host hashicorp/terraform:1.9 apply -auto-approve
-	@which rsync >/dev/null 2>&1 && rsync -az ubuntu@192.168.100.10:/home/habib/cloudvault-gitops-platform/infra-services/terraform/ infra-services/terraform/ 2>/dev/null || true
+	@scp -o StrictHostKeyChecking=no -r infra-services/terraform/* ubuntu@192.168.100.10:/home/habib/cloudvault-gitops-platform/infra-services/terraform/ 2>/dev/null || true
+	docker run --rm -e AWS_ACCESS_KEY_ID=test -e AWS_SECRET_ACCESS_KEY=test -e AWS_DEFAULT_REGION=us-east-1 -v $(PWD)/infra-services/terraform:/workspace -w /workspace --network host hashicorp/terraform:1.9 init -input=false
+	docker run --rm -e AWS_ACCESS_KEY_ID=test -e AWS_SECRET_ACCESS_KEY=test -e AWS_DEFAULT_REGION=us-east-1 -v $(PWD)/infra-services/terraform:/workspace -w /workspace --network host hashicorp/terraform:1.9 apply -auto-approve
 
 scan:
-	@which rsync >/dev/null 2>&1 && rsync -az --exclude '.git' --exclude 'node_modules' $(PWD)/ ubuntu@192.168.100.10:/home/habib/cloudvault-gitops-platform/ 2>/dev/null || true
-	docker run --rm -v $(PWD):/workspace -w /workspace aquasec/trivy:latest config --severity CRITICAL,HIGH .
+	@tar --exclude='node_modules' --exclude='.next' --exclude='.git' -cf - . | ssh -o StrictHostKeyChecking=no ubuntu@192.168.100.10 'tar -xf - -C /home/habib/cloudvault-gitops-platform/'
+	docker run --rm -v $(PWD):/workspace -w /workspace aquasec/trivy:latest config --severity CRITICAL,HIGH --ignorefile /workspace/.trivyignore .
 
 test:
 	cd apps/backend && go test -v -race -cover ./...

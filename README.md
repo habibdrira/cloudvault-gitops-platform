@@ -19,12 +19,12 @@
 
 ## 🏛️ Architecture Technique & Flux de Données
 
-L'infrastructure s'étend sur un réseau virtuel privé dédié (`VMnet8 : 192.168.100.0/24`) piloté depuis une station de contrôle **WSL2** :
+L'infrastructure s'étend sur un réseau virtuel privé dédié (`VMnet8 : 192.168.100.0/24`) piloté depuis une station de contrôle **WSL2 / DevContainer universel** :
 
 ```text
                                   +---------------------------------------+
-                                  |   WSL2 Control Station (Admin / CI)  |
-                                  |   Ansible | Terraform | Kubectl       |
+                                  |   Control Station (WSL2 / DevBox)     |
+                                  |   Ansible | Terraform (S3) | Kubectl  |
                                   +-------------------+-------------------+
                                                       |
                           DNS: cloudvault.local:80    | Git Commit & Push (GitHub Actions CI)
@@ -43,18 +43,17 @@ L'infrastructure s'étend sur un réseau virtuel privé dédié (`VMnet8 : 192.1
 |                                   |   |                                   |   |  [LocalStack Container 3.8]       |
 |  [Control Plane K3s Server]       |   |  [Worker Node K3s Agent]          |   |  - Gateway Port: 4566             |
 |  - CoreDNS, Metrics Server        |   |                                   |   |  - Services: S3, IAM, STS         |
-|  - Local-Path Provisioner         |   |  [Application Pods (cloudvault)]  |   |  - Bucket: cloudvault-documents   |
-|                                   |   |  * cloudvault-backend (Go 1.23)   |   |                                   |
-|  [Argo CD GitOps Engine]          |   |    Port 8080 (NodePort: 30081)    |   |  [Boot Hook Persistence]          |
-|  - Application Controller         |   |    Clean Arch / slog JSON         |   |  - /etc/localstack/init/ready.d/  |
-|  - Repo Server & API Server       |   |  * cloudvault-frontend (Next.js)  |   |    init-s3.sh (auto-recreate)     |
-|  - 4 Applications Synced          |   |    Port 3000 (NodePort: 30000)    |   +-----------------------------------+
-|                                   |   |                                   |                     ^
-|  [Observabilité (monitoring)]     |   |  [Observabilité (monitoring)]     |                     |
-|  * Prometheus Server (2.55)       |   |  * Grafana v11.3 (NodePort:30300) |                     |
-|  * Prometheus Operator (0.78)     |   |    Dashboard SRE auto-chargé      |                     |
-|  * Kube-State-Metrics (2.13)      |   |  * Node Exporter (DaemonSet)      |                     |
-|  * Node Exporter (DaemonSet)      |   |                                   |                     |
+|  - Local-Path Provisioner         |   |  [Application Pods (cloudvault)]  |   |  - Remote State:                  |
+|                                   |   |  * cloudvault-backend (Go 1.23)   |   |    cloudvault-terraform-state     |
+|  [Argo CD GitOps Engine]          |   |    Port 8080 (NodePort: 30081)    |   |  - Bucket Documentaire:           |
+|  - Root App (App-of-Apps)         |   |    Clean Arch / slog JSON         |   |    cloudvault-documents           |
+|  - 4 Applications Enfants         |   |  * cloudvault-frontend (Next.js)  |   |                                   |
+|                                   |   |    Port 3000 (NodePort: 30000)    |   |  [Boot Hook Persistence]          |
+|  [Observabilité (monitoring)]     |   |                                   |   |  - /etc/localstack/init/ready.d/  |
+|  * Prometheus Server (2.55)       |   |  [Observabilité (monitoring)]     |   |    init-s3.sh (auto-recreate)     |
+|  * Prometheus Operator (0.78)     |   |  * Grafana v11.3 (NodePort:30300) |   +-----------------------------------+
+|  * Kube-State-Metrics (2.13)      |   |    Dashboard SRE auto-chargé      |                     ^
+|  * Node Exporter (DaemonSet)      |   |  * Node Exporter (DaemonSet)      |                     |
 +-----------------------------------+   +-----------------------------------+                     |
                   |                                       |                                       |
                   |                                       +--- Demande URL pré-signée S3 -------->|
@@ -63,20 +62,21 @@ L'infrastructure s'étend sur un réseau virtuel privé dédié (`VMnet8 : 192.1
 
 ---
 
-## 🔄 Les 4 Piliers GitOps (Argo CD Applications)
+## 🔄 Les 4 Piliers GitOps (Pattern Argo CD App-of-Apps)
 
-L'intégralité de la plateforme est orchestrée de manière 100 % déclarative via 4 applications Argo CD :
+L'intégralité du cycle de vie du cluster est orchestrée selon le pattern canonique **App-of-Apps**. Une application racine unique (`cloudvault-root-app`, définie dans [`k8s/root-application.yaml`](k8s/root-application.yaml)) réconcilie et surveille automatiquement l'ensemble des 4 applications déclarées sous [`k8s/applications/`](k8s/applications/) :
 
-| Application Argo CD | Namespace Cible | Source / Path | Description |
-| :--- | :---: | :--- | :--- |
-| **`cloudvault-platform`** | `cloudvault` | `k8s/apps` (recurse) | Microservices backend Go, frontend Next.js, services, Ingress et `ServiceMonitor`. |
-| **`ingress-controller`** | `ingress-nginx` | `k8s/infrastructure/ingress-controller` | Ingress NGINX DaemonSet exposé sur le port hôte 80 avec classe `nginx`. |
-| **`monitoring-stack`** | `monitoring` | Helm `kube-prometheus-stack` (v65.8.1) | Opérateur Prometheus, Prometheus Server, Kube-State-Metrics, Node Exporter et Grafana. |
-| **`monitoring-dashboards`** | `monitoring` | `k8s/monitoring/dashboards` | ConfigMaps des Dashboards Grafana auto-découvertes et montées via sidecar. |
+| Ordre & Manifeste | Application Argo CD | Namespace Cible | Source / Path | Description |
+| :---: | :--- | :---: | :--- | :--- |
+| **01** | **`ingress-controller`** | `ingress-nginx` | `k8s/infrastructure/ingress-controller` | Ingress NGINX DaemonSet exposé sur le port hôte 80 avec classe `nginx`. |
+| **02** | **`monitoring-stack`** | `monitoring` | Helm `kube-prometheus-stack` (v65.8.1) | Opérateur Prometheus, Prometheus Server, Kube-State-Metrics, Node Exporter et Grafana. |
+| **03** | **`monitoring-dashboards`** | `monitoring` | `k8s/monitoring/dashboards` | ConfigMaps des Dashboards Grafana auto-découvertes et montées via sidecar. |
+| **04** | **`cloudvault-platform`** | `cloudvault` | `k8s/apps` (recurse) | Microservices backend Go, frontend Next.js, NetworkPolicies Zero-Trust, services et Ingress. |
 
 ```text
 $ kubectl --kubeconfig=./kubeconfig -n argocd get applications
 NAME                    SYNC STATUS   HEALTH STATUS
+cloudvault-root-app     Synced        Healthy
 cloudvault-platform     Synced        Healthy
 ingress-controller      Synced        Healthy
 monitoring-dashboards   Synced        Healthy

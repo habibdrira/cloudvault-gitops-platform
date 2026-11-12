@@ -146,34 +146,10 @@
   delay: 3
   changed_when: false
 
-# -- 7. Déploiement de l'Infrastructure as Code (Terraform conteneurisé) -------
+# -- 7. Nettoyage de l'anti-pattern Terraform sur infra-node -------------------
 
-- name: "infra_services | Créer le répertoire Terraform sur infra-node"
+- name: "infra_services | S'assurer que le répertoire orphelin Terraform est supprimé d'infra-node"
   ansible.builtin.file:
     path: "{{ localstack_dir }}/terraform"
-    state: directory
-    mode: "0755"
-    owner: ubuntu
-    group: ubuntu
-
-- name: "infra_services | Synchroniser les manifests Terraform"
-  ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../infra-services/terraform/"
-    dest: "{{ localstack_dir }}/terraform/"
-    mode: "0644"
-    owner: ubuntu
-    group: ubuntu
-
-- name: "infra_services | Initialiser et appliquer Terraform via conteneur officiel"
-  ansible.builtin.command:
-    cmd: >-
-      docker run --rm
-      -v {{ localstack_dir }}/terraform:/workspace
-      -w /workspace
-      --network host
-      --entrypoint sh
-      hashicorp/terraform:1.9
-      -c "terraform init -input=false && terraform apply -auto-approve -input=false"
-  register: tf_exec
-  changed_when: "'Apply complete!' in tf_exec.stdout"
+    state: absent
 

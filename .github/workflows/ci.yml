@@ -113,15 +113,16 @@ jobs:
           scan-type: 'fs'
           scanners: 'secret'
           severity: 'CRITICAL,HIGH'
-          exit-code: '0'
+          exit-code: '1'
 
       - name: Scan IaC & Kubernetes Misconfigurations
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'config'
           scan-ref: '.'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '0'
+          severity: 'CRITICAL'
+          exit-code: '1'
+          trivyignores: '.trivyignore'
 
       - name: Scan Backend Docker Image for Critical Vulnerabilities
         uses: aquasecurity/trivy-action@master

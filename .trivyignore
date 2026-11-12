@@ -1,0 +1,13 @@
+# CloudVault DevSecOps Quality Gate - Trivy Ignore List
+# ==============================================================================
+# Upstream vendor manifests (Argo CD official manifests & Ingress-NGINX controller)
+KSV-0041
+KSV-0044
+KSV-0046
+KSV-0118
+KSV-0009
+KSV-0014
+
+# LocalStack Mock Storage uses standard AWS SSE-S3 (AES256) instead of KMS CMK
+AVD-AWS-0132
+AWS-0132

@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: cloudvault-platform
+  name: cloudvault-root-app
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
@@ -10,12 +10,12 @@ spec:
   source:
     repoURL: https://github.com/habibdrira/cloudvault-gitops-platform.git
     targetRevision: main
-    path: k8s/apps
+    path: k8s/applications
     directory:
       recurse: true
   destination:
     server: https://kubernetes.default.svc
-    namespace: cloudvault
+    namespace: argocd
   syncPolicy:
     automated:
       prune: true
@@ -23,4 +23,3 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
-
