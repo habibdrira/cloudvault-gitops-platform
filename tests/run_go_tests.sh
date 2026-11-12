@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd /home/habib/cloudvault-gitops-platform/apps/backend
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+cd "${REPO_ROOT}/apps/backend"
 
 tar -czf - . | ssh ubuntu@192.168.100.10 '
   rm -rf /tmp/backend_test

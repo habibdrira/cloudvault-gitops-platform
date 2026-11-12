@@ -3,8 +3,9 @@
 # ==============================================================================
 
 SHELL := /bin/bash
-export PATH := /home/habib/.local/bin:$(PATH)
+export PATH := $(HOME)/.local/bin:$(PATH)
 PWD := $(shell pwd)
+REMOTE_HOST ?= ubuntu@192.168.100.10
 
 .PHONY: all bootstrap tf-apply scan test demo help
 
@@ -23,12 +24,18 @@ bootstrap:
 	$(MAKE) tf-apply
 
 tf-apply:
-	@scp -o StrictHostKeyChecking=no -r infra-services/terraform/* ubuntu@192.168.100.10:/home/habib/cloudvault-gitops-platform/infra-services/terraform/ 2>/dev/null || true
+	@if [ -n "$$DOCKER_HOST" ] || grep -q 'DOCKER_HOST' "$$(which docker 2>/dev/null)" 2>/dev/null; then \
+		ssh -o StrictHostKeyChecking=no $(REMOTE_HOST) "mkdir -p $(PWD)/infra-services/terraform" 2>/dev/null || true; \
+		scp -o StrictHostKeyChecking=no -r infra-services/terraform/* $(REMOTE_HOST):$(PWD)/infra-services/terraform/ 2>/dev/null || true; \
+	fi
 	docker run --rm -e AWS_ACCESS_KEY_ID=test -e AWS_SECRET_ACCESS_KEY=test -e AWS_DEFAULT_REGION=us-east-1 -v $(PWD)/infra-services/terraform:/workspace -w /workspace --network host hashicorp/terraform:1.9 init -input=false
 	docker run --rm -e AWS_ACCESS_KEY_ID=test -e AWS_SECRET_ACCESS_KEY=test -e AWS_DEFAULT_REGION=us-east-1 -v $(PWD)/infra-services/terraform:/workspace -w /workspace --network host hashicorp/terraform:1.9 apply -auto-approve
 
 scan:
-	@tar --exclude='node_modules' --exclude='.next' --exclude='.git' -cf - . | ssh -o StrictHostKeyChecking=no ubuntu@192.168.100.10 'tar -xf - -C /home/habib/cloudvault-gitops-platform/'
+	@if [ -n "$$DOCKER_HOST" ] || grep -q 'DOCKER_HOST' "$$(which docker 2>/dev/null)" 2>/dev/null; then \
+		ssh -o StrictHostKeyChecking=no $(REMOTE_HOST) "mkdir -p $(PWD)" 2>/dev/null || true; \
+		tar --exclude='node_modules' --exclude='.next' --exclude='.git' -cf - . | ssh -o StrictHostKeyChecking=no $(REMOTE_HOST) "tar -xf - -C $(PWD)/" 2>/dev/null || true; \
+	fi
 	docker run --rm -v $(PWD):/workspace -w /workspace aquasec/trivy:latest config --severity CRITICAL,HIGH --ignorefile /workspace/.trivyignore .
 
 test:

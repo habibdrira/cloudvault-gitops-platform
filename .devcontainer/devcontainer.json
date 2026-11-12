@@ -28,3 +28,4 @@
   "remoteUser": "ubuntu",
   "postCreateCommand": "make --version && ansible --version && kubectl version --client"
 }
+
