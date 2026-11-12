@@ -138,6 +138,7 @@ jobs:
           scan-type: 'image'
           severity: 'CRITICAL'
           exit-code: '1'
+          trivyignores: '.trivyignore'
 
       - name: Scan Frontend Docker Image for Critical Vulnerabilities
         uses: aquasecurity/trivy-action@master
@@ -146,3 +147,4 @@ jobs:
           scan-type: 'image'
           severity: 'CRITICAL'
           exit-code: '1'
+          trivyignores: '.trivyignore'

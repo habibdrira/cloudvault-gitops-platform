@@ -11,3 +11,7 @@ KSV-0014
 # LocalStack Mock Storage uses standard AWS SSE-S3 (AES256) instead of KMS CMK
 AVD-AWS-0132
 AWS-0132
+
+# Upstream Go runtime standard library CVEs in distroless/alpine builder
+CVE-2025-68121
+

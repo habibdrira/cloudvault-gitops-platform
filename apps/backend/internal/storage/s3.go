@@ -24,20 +24,9 @@ type S3Storage struct {
 }
 
 func NewS3Storage(cfg *config.Config) (*S3Storage, error) {
-	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-		if cfg.EndpointURL != "" {
-			return aws.Endpoint{
-				URL:           cfg.EndpointURL,
-				SigningRegion: region,
-			}, nil
-		}
-		return aws.Endpoint{}, &aws.EndpointNotFoundError{}
-	})
-
 	awsCfg, err := awsconfig.LoadDefaultConfig(context.Background(),
 		awsconfig.WithRegion(cfg.AWSRegion),
 		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(cfg.AccessKey, cfg.SecretKey, "")),
-		awsconfig.WithEndpointResolverWithOptions(customResolver),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AWS config: %w", err)
@@ -45,6 +34,9 @@ func NewS3Storage(cfg *config.Config) (*S3Storage, error) {
 
 	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		o.UsePathStyle = true
+		if cfg.EndpointURL != "" {
+			o.BaseEndpoint = aws.String(cfg.EndpointURL)
+		}
 	})
 	presignClient := s3.NewPresignClient(client)
 
