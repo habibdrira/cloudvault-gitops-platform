@@ -37,7 +37,7 @@ echo ""
 # ------------------------------------------------------------------------------
 # Étape 1 : Vérification des sondes de santé Backend (Liveness & Readiness)
 # ------------------------------------------------------------------------------
-echo -e "${BOLD}[Étape 1/4] Validation des sondes de santé Backend K8s (/healthz, /readyz)...${RESET}"
+echo -e "${BOLD}[Étape 1/5] Validation des sondes de santé Backend K8s (/healthz, /readyz)...${RESET}"
 
 HEALTHZ_CODE=$(curl -s -o /tmp/healthz_resp.json -w "%{http_code}" "http://${NODEPORT_IP}:${BACKEND_PORT}/healthz")
 if [ "${HEALTHZ_CODE}" -ne 200 ]; then
@@ -59,7 +59,7 @@ echo ""
 # ------------------------------------------------------------------------------
 # Étape 2 : Demande d'URL pré-signée S3 via l'Ingress NGINX (Port 80)
 # ------------------------------------------------------------------------------
-echo -e "${BOLD}[Étape 2/4] Demande d'URL pré-signée S3 via POST /api/v1/documents/upload-url...${RESET}"
+echo -e "${BOLD}[Étape 2/5] Demande d'URL pré-signée S3 via POST /api/v1/documents/upload-url...${RESET}"
 
 UPLOAD_URL_RESP=$(curl -s -w "\n%{http_code}" -X POST \
     -H "Host: ${HOST_HEADER}" \
@@ -87,7 +87,7 @@ echo ""
 # ------------------------------------------------------------------------------
 # Étape 3 : Téléversement direct du fichier vers S3 LocalStack via URL pré-signée
 # ------------------------------------------------------------------------------
-echo -e "${BOLD}[Étape 3/4] Téléversement direct sécurisé (HTTP PUT) vers S3 LocalStack...${RESET}"
+echo -e "${BOLD}[Étape 3/5] Téléversement direct sécurisé (HTTP PUT) vers S3 LocalStack...${RESET}"
 echo -e "  Contenu injecté : \"${TEST_CONTENT}\""
 
 PUT_CODE=$(curl -s -o /tmp/s3_put_resp.txt -w "%{http_code}" -X PUT \
@@ -106,7 +106,7 @@ echo ""
 # ------------------------------------------------------------------------------
 # Étape 4 : Interrogation GET /api/v1/documents et validation de la persistance
 # ------------------------------------------------------------------------------
-echo -e "${BOLD}[Étape 4/4] Interrogation de l'inventaire via GET /api/v1/documents...${RESET}"
+echo -e "${BOLD}[Étape 4/5] Interrogation de l'inventaire via GET /api/v1/documents...${RESET}"
 
 LIST_RESP=$(curl -s -w "\n%{http_code}" -X GET \
     -H "Host: ${HOST_HEADER}" \
@@ -133,13 +133,50 @@ found = any(doc.get("key") == target_key for doc in data.get("documents", []))
 print("FOUND" if found else "NOT_FOUND")
 ' "${S3_OBJECT_KEY}")
 
-echo ""
-if [ "${FOUND}" = "FOUND" ]; then
-    echo -e "${BOLD}${GREEN}=====================================================================${RESET}"
-    echo -e "${BOLD}${GREEN}  VALIDATION E2E RÉUSSIE AVEC SUCCÈS ! LA PLATEFORME EST CONFORME    ${RESET}"
-    echo -e "${BOLD}${GREEN}=====================================================================${RESET}"
-else
+if [ "${FOUND}" != "FOUND" ]; then
     echo -e "${RED}[ERREUR] Le document ${S3_OBJECT_KEY} n'a pas été retrouvé dans la liste S3.${RESET}"
     exit 1
 fi
+echo -e "  ${GREEN}✔${RESET} Vérification S3     : ${GREEN}Document présent avec version_id${RESET}"
+echo ""
+
+# ------------------------------------------------------------------------------
+# Étape 5 : Génération d'un lien de partage temporaire via POST /api/v1/documents/{key}/share
+# ------------------------------------------------------------------------------
+echo -e "${BOLD}[Étape 5/5] Génération d'un lien de partage temporaire via POST /api/v1/documents/${S3_OBJECT_KEY}/share...${RESET}"
+
+SHARE_RESP=$(curl -s -w "\n%{http_code}" -X POST \
+    -H "Host: ${HOST_HEADER}" \
+    -H "Content-Type: application/json" \
+    -d '{"expires_in_minutes": 15}' \
+    "http://${INGRESS_IP}/api/v1/documents/${S3_OBJECT_KEY}/share")
+
+SHARE_BODY=$(echo "${SHARE_RESP}" | sed '$d')
+SHARE_CODE=$(echo "${SHARE_RESP}" | tail -n 1)
+
+if [ "${SHARE_CODE}" -ne 200 ]; then
+    echo -e "${RED}[ERREUR] Échec de la génération du lien de partage : HTTP ${SHARE_CODE}${RESET}"
+    echo "${SHARE_BODY}"
+    exit 1
+fi
+
+SHARE_URL=$(echo "${SHARE_BODY}" | python3 -c 'import sys, json; print(json.load(sys.stdin)["share_url"])')
+EXPIRES_IN=$(echo "${SHARE_BODY}" | python3 -c 'import sys, json; print(json.load(sys.stdin)["expires_in_seconds"])')
+
+echo -e "  ${GREEN}✔${RESET} Lien généré Ingress : ${GREEN}HTTP 200 OK${RESET} (Validité: ${EXPIRES_IN}s / 15 min)"
+echo -e "  ${GREEN}✔${RESET} URL pré-signée S3   : ${CYAN}${SHARE_URL:0:80}...${RESET}"
+
+# Test direct du téléchargement via le lien de partage
+DOWNLOADED_CONTENT=$(curl -s "${SHARE_URL}")
+if [ "${DOWNLOADED_CONTENT}" = "${TEST_CONTENT}" ]; then
+    echo -e "  ${GREEN}✔${RESET} Téléchargement      : ${GREEN}Contenu intègre correspondant à la preuve injectée${RESET}"
+else
+    echo -e "${RED}[ERREUR] Le contenu téléchargé via le lien de partage ne correspond pas.${RESET}"
+    exit 1
+fi
+
+echo ""
+echo -e "${BOLD}${GREEN}=====================================================================${RESET}"
+echo -e "${BOLD}${GREEN}  VALIDATION E2E RÉUSSIE AVEC SUCCÈS ! LA PLATEFORME EST CONFORME    ${RESET}"
+echo -e "${BOLD}${GREEN}=====================================================================${RESET}"
 

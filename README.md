@@ -1,19 +1,28 @@
 # CloudVault GitOps Platform 🛡️🚀
 
-[![CloudVault CI](https://github.com/habibdrira/cloudvault-gitops-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/habibdrira/cloudvault-gitops-platform/actions/workflows/ci.yml)
-[![Kubernetes K3s](https://img.shields.io/badge/Kubernetes-K3s%20v1.31-326CE5?logo=kubernetes&logoColor=white)](https://k3s.io)
-[![GitOps ArgoCD](https://img.shields.io/badge/GitOps-Argo%20CD%20v2.12-EF6B48?logo=argo&logoColor=white)](https://argoproj.github.io/cd/)
-[![Prometheus](https://img.shields.io/badge/Monitoring-Prometheus%20v2.55-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io)
-[![Grafana](https://img.shields.io/badge/Dashboard-Grafana%20v11.3-F46800?logo=grafana&logoColor=white)](https://grafana.com)
-[![Terraform](https://img.shields.io/badge/IaC-Terraform%20v1.9-844FBA?logo=terraform&logoColor=white)](https://terraform.io)
-[![Ansible](https://img.shields.io/badge/Automation-Ansible%20Core-EE0000?logo=ansible&logoColor=white)](https://ansible.com)
-[![DevSecOps](https://img.shields.io/badge/Security-Trivy%200%20Alerts-2496ED?logo=aquasec&logoColor=white)](https://trivy.dev)
-[![Go Backend](https://img.shields.io/badge/Backend-Go%201.23%20Clean%20Arch-00ADD8?logo=go&logoColor=white)](https://golang.org)
-[![Next.js Frontend](https://img.shields.io/badge/Frontend-Next.js%2014%20Modular-000000?logo=nextdotjs&logoColor=white)](https://nextjs.org)
-[![Standard](https://img.shields.io/badge/Architecture-Gold%20Standard%2010%2F10-success)](https://github.com/habibdrira/cloudvault-gitops-platform)
+[![CI/DevSecOps Status](https://github.com/habibdrira/cloudvault-gitops-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/habibdrira/cloudvault-gitops-platform/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/badge/Go-1.23-00ADD8?logo=go&logoColor=white)](https://golang.org)
+[![Next.js Version](https://img.shields.io/badge/Next.js-14-black?logo=nextdotjs&logoColor=white)](https://nextjs.org)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-K3s%20v1.31-326CE5?logo=kubernetes&logoColor=white)](https://k3s.io)
+[![GitOps](https://img.shields.io/badge/GitOps-Argo%20CD%20v2.12-EF6B48?logo=argo&logoColor=white)](https://argoproj.github.io/cd/)
+[![IaC](https://img.shields.io/badge/IaC-Terraform%201.9-844FBA?logo=terraform&logoColor=white)](https://terraform.io)
+[![Security](https://img.shields.io/badge/Trivy-0%20Alerts-2496ED?logo=aquasec&logoColor=white)](https://trivy.dev)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > **CloudVault** est une plateforme documentaire d'entreprise haute résilience, orchestrée selon les principes **GitOps & SRE de bout en bout**.  
 > Elle associe l'automatisation d'infrastructure (**Ansible & Terraform**), un cluster **Kubernetes K3s** multi-nœuds, la réconciliation continue par **Argo CD** (*App-of-Apps*), la sécurité **Zero-Trust** (Conteneurs Distroless, FS Read-Only, NetworkPolicies), une observabilité native (**Prometheus SRE Golden Signals & Grafana as Code**) et un stockage objet **AWS S3 FinOps**.
+
+---
+
+## 📑 Table des Matières
+
+- [🏛️ Architecture Globale & Flux de Données](#️-architecture-globale--flux-de-données)
+- [💎 Les 6 Piliers d'Excellence Technique (Gold Standard)](#-les-6-piliers-dexcellence-technique-gold-standard)
+- [🚀 Quickstart & Commandes (Makefile)](#-quickstart--commandes-makefile)
+- [🌐 Points d'Accès de la Plateforme](#-points-daccès-de-la-plateforme)
+- [☁️ Production Evolution Roadmap (AWS EKS)](#️-production-evolution-roadmap-aws-eks)
+- [📂 Structure du Répertoire](#-structure-du-répertoire)
+- [📜 Licence](#-licence)
 
 ---
 
@@ -67,7 +76,7 @@ L'infrastructure s'étend sur un réseau virtuel privé dédié (`VMnet8 : 192.1
 
 | Pilier | Solution Déployée | Bénéfice Opérationnel |
 | :--- | :--- | :--- |
-| **GitOps Declaratif** | **Argo CD App-of-Apps** (`cloudvault-root-app`) | Réconciliation continue en cascade de 4 applications sans intervention impérative. |
+| **GitOps Déclaratif** | **Argo CD App-of-Apps** (`cloudvault-root-app`) | Réconciliation continue en cascade de 4 applications sans intervention impérative. |
 | **Haute Disponibilité** | **HPA (2 $\rightarrow$ 10 réplicas)** & **PDB (minAvailable: 1)** | Autoscaling basé sur CPU/RAM et zéro coupure de service lors des opérations de maintenance. |
 | **Sécurité Zero-Trust** | **Distroless**, `readOnlyRootFilesystem: true`, **TLS Ingress** | Surface d'attaque minimale, disque racine verrouillé, flux réseau isolés par NetworkPolicies. |
 | **Gestion d'État IaC** | **Remote Backend S3 LocalStack** (`cloudvault-terraform-state`) | Éradication totale du "Split-Brain" entre poste de travail et nœud d'infrastructure. |
@@ -76,25 +85,24 @@ L'infrastructure s'étend sur un réseau virtuel privé dédié (`VMnet8 : 192.1
 
 ---
 
-## 🚀 Démarrage Rapide Zero-Touch
+## 🚀 Quickstart & Commandes (`Makefile`)
 
-L'ensemble du cycle de vie de la plateforme est piloté via le [`Makefile`](Makefile) :
+L'ensemble des opérations du cycle de vie de la plateforme est orchestré de manière standardisée et reproductible via le [`Makefile`](Makefile) :
+
+| Commande | Objectif & Description | Résultat Attendu |
+| :--- | :--- | :--- |
+| `make bootstrap` | Déploie l'infrastructure complète de zéro via Ansible (OS, Docker, LocalStack, K3s multi-nœuds, Argo CD) et initialise le provisionnement Terraform. | Nœuds opérationnels, cluster K3s prêt et applications Argo CD en cours de synchronisation. |
+| `make tf-apply` | Initialise et applique la configuration IaC Terraform conteneurisée avec stockage d'état distant (`s3://cloudvault-terraform-state/infra-services/terraform.tfstate`). | `No changes. Your infrastructure matches the configuration.` (Convergence 100 % idempotente). |
+| `make scan` | Lance l'audit de sécurité DevSecOps exhaustif avec Aqua Security Trivy sur les 13 cibles (Dockerfiles, manifestes Kubernetes, code Terraform). | `0 Misconfigurations (0 CRITICAL, 0 HIGH)`. |
+| `make test` | Exécute la suite complète de tests unitaires backend Go avec détecteur de concurrence mémoire et couverture de code (`go test -v -race -cover ./...`). | `PASS` avec 0 race condition détectée et couverture robuste. |
+| `make demo` | Exécute le pipeline automatisé de vérification E2E (`scripts/demo-e2e.sh`) couvrant les sondes K8s, URLs pré-signées, upload S3, listing avec `version_id` et lien de partage temporaire. | `VALIDATION E2E RÉUSSIE AVEC SUCCÈS ! LA PLATEFORME EST CONFORME`. |
 
 ```bash
-# 1. Déploiement complet de l'infrastructure (Ansible OS + Terraform S3 conteneurisé)
-make bootstrap
-
-# 2. Déploiement/Mise à jour de l'IaC Terraform avec Remote State S3
-make tf-apply
-
-# 3. Exécution des tests unitaires Go avec détecteur de concurrence (-race -cover)
-make test
-
-# 4. Audit de sécurité DevSecOps local (Scan Trivy IaC, K8s et conteneurs : 0 failles)
-make scan
-
-# 5. Validation automatisée de bout en bout (Sondes, URLs pré-signées, upload S3, routage)
-make demo
+# Workflow typique de validation complète :
+make test      # Validation du code backend & concurrence
+make scan      # Audit de sécurité DevSecOps zéro-défaut
+make tf-apply  # Vérification de l'alignement de l'infrastructure
+make demo      # Validation bout-en-bout en direct
 ```
 
 ---
@@ -109,6 +117,21 @@ make demo
 | **Argo CD UI (GitOps)** | `https://192.168.100.20:30443` | NodePort HTTPS / `admin` |
 | **Backend Raw Metrics** | `http://192.168.100.21:30081/metrics` | NodePort format Prometheus |
 | **LocalStack S3 Gateway** | `http://192.168.100.10:4566` | REST API AWS S3 & IAM |
+
+---
+
+## ☁️ Production Evolution Roadmap (AWS EKS)
+
+L'architecture de CloudVault a été conçue pour une transposition directe et transparente vers un environnement managé de production hyperscaler (**AWS EKS**) sans refactorisation applicative :
+
+1. **Gestion Dynamique des Secrets (External Secrets Operator) :**
+   - Remplacement des `Secret` Kubernetes statiques par des ressources `ExternalSecret` et `SecretStore` connectées à **AWS Secrets Manager** ou **AWS Systems Manager Parameter Store**, avec rotation automatique des clés et rôles IAM via **IRSA** (IAM Roles for Service Accounts).
+2. **Gestion Automatisée des Certificats & Ingress TLS (`cert-manager`) :**
+   - Déploiement de **cert-manager** avec un `ClusterIssuer` Let's Encrypt (DNS-01 via Route 53 ou HTTP-01 via AWS ALB Ingress Controller) pour le renouvellement automatique des certificats SSL/TLS x509, assurant un chiffrement de bout en bout avec endpoints S3 natifs HTTPS.
+3. **Haute Disponibilité & Résilience Avancée :**
+   - Exploitation des **Horizontal Pod Autoscalers (HPA)** configurés sur métriques personnalisées Prometheus (latence requêtes, taux d'erreurs 5xx) combinés aux **PodDisruptionBudgets (PDB)** et au provisionneur dynamique **Karpenter / Cluster Autoscaler** pour le dimensionnement élastique des nœuds EC2 multi-AZ.
+4. **Télémétrie & Traçabilité Distribuée (OpenTelemetry) :**
+   - Intégration d'un collecteur **OpenTelemetry (OTel)** pour la collecte unifiée des traces distribuées, métriques et logs vers **Amazon Managed Prometheus (AMP)**, **Amazon Managed Grafana (AMG)** et **AWS CloudWatch / X-Ray**.
 
 ---
 
@@ -143,4 +166,5 @@ cloudvault-gitops-platform/
 ---
 
 ## 📜 Licence
-Ce projet est sous licence open-source **[MIT](LICENSE)**. Conçu comme une référence d'excellence pour l'ingénierie Cloud, DevOps, SRE et DevSecOps moderne.
+
+Ce projet est sous licence open-source **[MIT](https://opensource.org/licenses/MIT)**. Conçu comme une référence d'excellence pour l'ingénierie Cloud, DevOps, SRE et DevSecOps moderne.
