@@ -32,6 +32,13 @@ jobs:
       - name: Go Syntax & Vet Analysis
         run: go vet ./...
 
+      - name: Static Code Analysis (golangci-lint)
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.61
+          working-directory: apps/backend
+          args: --timeout=5m
+
       - name: Run Unit Tests with Race Detector & Coverage
         run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 

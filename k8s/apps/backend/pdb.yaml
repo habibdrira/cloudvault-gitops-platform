@@ -1,0 +1,14 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cloudvault-backend-pdb
+  namespace: cloudvault
+  labels:
+    app.kubernetes.io/name: cloudvault-backend
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: cloudvault-platform
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudvault-backend

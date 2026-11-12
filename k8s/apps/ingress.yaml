@@ -7,10 +7,13 @@ metadata:
     app.kubernetes.io/name: cloudvault-ingress
     app.kubernetes.io/part-of: cloudvault-platform
   annotations:
-    nginx.ingress.kubernetes.io/ssl-redirect: "false"
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
 spec:
   ingressClassName: nginx
+  tls:
+    - hosts:
+        - cloudvault.local
+      secretName: cloudvault-tls-cert
   rules:
     - host: cloudvault.local
       http:
