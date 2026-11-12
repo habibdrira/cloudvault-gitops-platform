@@ -20,6 +20,7 @@ type DocumentItem struct {
 	Size         int64     `json:"size"`
 	LastModified time.Time `json:"last_modified"`
 	DownloadURL  string    `json:"download_url"`
+	PreviewURL   string    `json:"preview_url,omitempty"`
 	VersionID    string    `json:"version_id,omitempty"`
 	IsLatest     bool      `json:"is_latest"`
 }
@@ -60,6 +61,7 @@ type DocumentStorage interface {
 	CheckHealth(ctx context.Context) error
 	GenerateUploadURL(ctx context.Context, objectKey string, contentType string) (string, error)
 	GenerateDownloadURL(ctx context.Context, objectKey string) (string, error)
+	GeneratePreviewURL(ctx context.Context, objectKey string) (string, error)
 	GenerateShareURL(ctx context.Context, objectKey string, expiration time.Duration) (string, error)
 	ListDocuments(ctx context.Context) ([]DocumentItem, error)
 	DeleteDocument(ctx context.Context, objectKey string) error

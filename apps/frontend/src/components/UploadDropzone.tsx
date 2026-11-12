@@ -1,31 +1,58 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { UploadCloud } from "lucide-react";
+import { UploadCloud, ShieldAlert, CheckCircle } from "lucide-react";
 import { ProgressBar } from "./ProgressBar";
 
 interface UploadDropzoneProps {
-  onFileUpload: (file: File) => void;
+  onFilesUpload: (files: File[]) => void;
   isUploading: boolean;
   uploadProgress: number;
   uploadStatusText?: string;
+  onErrorNotification?: (msg: string) => void;
 }
 
+const ALLOWED_EXTENSIONS = ["pdf", "png", "jpg", "jpeg", "txt", "json"];
+const FORBIDDEN_EXTENSIONS = ["exe", "bat", "sh", "bin", "cmd", "msi", "ps1", "vbs"];
+
 export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
-  onFileUpload,
+  onFilesUpload,
   isUploading,
   uploadProgress,
   uploadStatusText,
+  onErrorNotification,
 }) => {
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const processFiles = (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0 || isUploading) return;
+
+    const validFiles: File[] = [];
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      const ext = file.name.split(".").pop()?.toLowerCase() || "";
+
+      if (FORBIDDEN_EXTENSIONS.includes(ext)) {
+        if (onErrorNotification) {
+          onErrorNotification(
+            `Fichier "${file.name}" rejeté : les exécutables ou scripts (.${ext}) sont interdits par la politique de sécurité Zero-Trust.`
+          );
+        }
+        return;
+      }
+      validFiles.push(file);
+    }
+
+    if (validFiles.length > 0) {
+      onFilesUpload(validFiles);
+    }
+  };
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-    if (!isUploading && e.dataTransfer.files && e.dataTransfer.files[0]) {
-      onFileUpload(e.dataTransfer.files[0]);
-    }
+    processFiles(e.dataTransfer.files);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -39,6 +66,7 @@ export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
 
   const handleClick = () => {
     if (!isUploading && fileInputRef.current) {
+      fileInputRef.current.value = "";
       fileInputRef.current.click();
     }
   };
@@ -60,11 +88,8 @@ export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
       <input
         type="file"
         ref={fileInputRef}
-        onChange={(e) => {
-          if (e.target.files?.[0]) {
-            onFileUpload(e.target.files[0]);
-          }
-        }}
+        multiple
+        onChange={(e) => processFiles(e.target.files)}
         disabled={isUploading}
         className="hidden"
       />
@@ -74,11 +99,24 @@ export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
       </div>
 
       <h3 className="text-base md:text-lg font-semibold text-slate-200 mb-1">
-        Déposez un document ou cliquez pour parcourir
+        Déposez un ou plusieurs documents ou cliquez pour parcourir
       </h3>
-      <p className="text-xs md:text-sm text-slate-400 max-w-sm mb-2">
+      <p className="text-xs md:text-sm text-slate-400 max-w-sm mb-3">
         Téléversement chiffré direct vers S3 LocalStack via URL pré-signée cryptographique.
       </p>
+
+      {/* Badges des formats autorisés */}
+      <div className="flex flex-wrap items-center justify-center gap-1.5 mb-2">
+        {ALLOWED_EXTENSIONS.map((ext) => (
+          <span
+            key={ext}
+            className="px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-slate-800 text-slate-400 border border-slate-700/80 uppercase"
+          >
+            .{ext}
+          </span>
+        ))}
+        <span className="text-[11px] text-slate-500 ml-1.5">• Max 50 Mo</span>
+      </div>
 
       {/* Jauge de progression dynamique réelle */}
       {isUploading && (
@@ -89,4 +127,3 @@ export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
     </div>
   );
 };
-

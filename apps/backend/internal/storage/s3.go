@@ -90,9 +90,38 @@ func (s *S3Storage) GenerateUploadURL(ctx context.Context, objectKey string, con
 }
 
 func (s *S3Storage) GenerateDownloadURL(ctx context.Context, objectKey string) (string, error) {
+	origFilename := objectKey
+	if parts := strings.SplitN(objectKey, "_", 2); len(parts) == 2 {
+		origFilename = parts[1]
+	}
+	origFilename = filepath.Base(origFilename)
+	disposition := fmt.Sprintf("attachment; filename=\"%s\"", origFilename)
+
 	presignedReq, err := s.presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(s.cfg.BucketName),
-		Key:    aws.String(objectKey),
+		Bucket:                     aws.String(s.cfg.BucketName),
+		Key:                        aws.String(objectKey),
+		ResponseContentDisposition: aws.String(disposition),
+	}, func(opts *s3.PresignOptions) {
+		opts.Expires = 60 * time.Minute
+	})
+	if err != nil {
+		return fmt.Sprintf("%s/%s/%s", s.cfg.EndpointURL, s.cfg.BucketName, objectKey), nil
+	}
+	return presignedReq.URL, nil
+}
+
+func (s *S3Storage) GeneratePreviewURL(ctx context.Context, objectKey string) (string, error) {
+	origFilename := objectKey
+	if parts := strings.SplitN(objectKey, "_", 2); len(parts) == 2 {
+		origFilename = parts[1]
+	}
+	origFilename = filepath.Base(origFilename)
+	disposition := fmt.Sprintf("inline; filename=\"%s\"", origFilename)
+
+	presignedReq, err := s.presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket:                     aws.String(s.cfg.BucketName),
+		Key:                        aws.String(objectKey),
+		ResponseContentDisposition: aws.String(disposition),
 	}, func(opts *s3.PresignOptions) {
 		opts.Expires = 60 * time.Minute
 	})
@@ -104,9 +133,17 @@ func (s *S3Storage) GenerateDownloadURL(ctx context.Context, objectKey string) (
 
 func (s *S3Storage) GenerateShareURL(ctx context.Context, objectKey string, expiration time.Duration) (string, error) {
 	start := time.Now()
+	origFilename := objectKey
+	if parts := strings.SplitN(objectKey, "_", 2); len(parts) == 2 {
+		origFilename = parts[1]
+	}
+	origFilename = filepath.Base(origFilename)
+	disposition := fmt.Sprintf("attachment; filename=\"%s\"", origFilename)
+
 	presignedReq, err := s.presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(s.cfg.BucketName),
-		Key:    aws.String(objectKey),
+		Bucket:                     aws.String(s.cfg.BucketName),
+		Key:                        aws.String(objectKey),
+		ResponseContentDisposition: aws.String(disposition),
 	}, func(opts *s3.PresignOptions) {
 		opts.Expires = expiration
 	})
@@ -146,6 +183,7 @@ func (s *S3Storage) ListDocuments(ctx context.Context) ([]domain.DocumentItem, e
 		origFilename = filepath.Base(origFilename)
 
 		downloadURL, _ := s.GenerateDownloadURL(ctx, key)
+		previewURL, _ := s.GeneratePreviewURL(ctx, key)
 
 		versionID := aws.ToString(version.VersionId)
 		if versionID == "null" {
@@ -158,6 +196,7 @@ func (s *S3Storage) ListDocuments(ctx context.Context) ([]domain.DocumentItem, e
 			Size:         aws.ToInt64(version.Size),
 			LastModified: aws.ToTime(version.LastModified),
 			DownloadURL:  downloadURL,
+			PreviewURL:   previewURL,
 			VersionID:    versionID,
 			IsLatest:     aws.ToBool(version.IsLatest),
 		})

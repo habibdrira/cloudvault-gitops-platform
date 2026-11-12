@@ -45,6 +45,10 @@ func (m *MockDocumentStorage) GenerateDownloadURL(ctx context.Context, objectKey
 	return m.downloadURLResult, nil
 }
 
+func (m *MockDocumentStorage) GeneratePreviewURL(ctx context.Context, objectKey string) (string, error) {
+	return m.downloadURLResult, nil
+}
+
 func (m *MockDocumentStorage) GenerateShareURL(ctx context.Context, objectKey string, expiration time.Duration) (string, error) {
 	m.lastSharedKey = objectKey
 	m.lastSharedTTL = expiration

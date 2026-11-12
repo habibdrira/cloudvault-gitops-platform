@@ -45,6 +45,19 @@ resource "aws_s3_bucket_versioning" "documents" {
   }
 }
 
+# 3bis. Configuration CORS pour téléversement direct depuis les navigateurs Web
+resource "aws_s3_bucket_cors_configuration" "documents" {
+  bucket = aws_s3_bucket.documents.id
+
+  cors_rule {
+    allowed_headers = ["*"]
+    allowed_methods = ["PUT", "POST", "GET", "HEAD", "DELETE"]
+    allowed_origins = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}
+
 # 4. Règles FinOps d'optimisation du cycle de vie du stockage
 resource "aws_s3_bucket_lifecycle_configuration" "documents" {
   bucket = aws_s3_bucket.documents.id

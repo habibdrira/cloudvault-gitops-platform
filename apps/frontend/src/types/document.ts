@@ -4,6 +4,7 @@ export interface DocumentItem {
   size: number;
   last_modified: string;
   download_url: string;
+  preview_url?: string;
   version_id?: string;
   is_latest?: boolean;
 }

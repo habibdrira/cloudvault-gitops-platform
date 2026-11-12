@@ -15,6 +15,7 @@ import { UploadDropzone } from "../components/UploadDropzone";
 import { DocumentList } from "../components/DocumentList";
 import { DeleteModal } from "../components/DeleteModal";
 import { ShareModal } from "../components/ShareModal";
+import { PreviewModal } from "../components/PreviewModal";
 
 export default function Home() {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
@@ -33,6 +34,10 @@ export default function Home() {
   // États de la modale de partage temporaire
   const [selectedDocForShare, setSelectedDocForShare] = useState<DocumentItem | null>(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
+
+  // États de la modale d'aperçu
+  const [selectedDocForPreview, setSelectedDocForPreview] = useState<DocumentItem | null>(null);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState<boolean>(false);
 
   // Notifications
   const [statusMessage, setStatusMessage] = useState<StatusMessage | null>(null);
@@ -55,41 +60,45 @@ export default function Home() {
     fetchDocuments();
   }, []);
 
-  // Téléversement avec jauge de progression réelle via XMLHttpRequest (XHR onprogress)
-  const handleFileUpload = async (file: File) => {
-    try {
-      setIsUploading(true);
-      setUploadProgress(0);
-      setStatusMessage(null);
-      setUploadStatusText(`Génération de l'URL pré-signée S3...`);
+  // Téléversement d'un fichier individuel avec XHR et progression réelle
+  const uploadSingleFile = (file: File, fileIndex: number, totalFiles: number): Promise<void> => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        setUploadStatusText(
+          totalFiles > 1 
+            ? `[${fileIndex}/${totalFiles}] Demande d'URL S3 pour "${file.name}"...`
+            : `Génération de l'URL pré-signée S3...`
+        );
 
-      // 1. Demande d'URL pré-signée au backend Go
-      const presignRes = await fetch("/api/v1/documents/upload-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          filename: file.name,
-          content_type: file.type || "application/octet-stream",
-        }),
-      });
+        // 1. Demande d'URL pré-signée au backend Go
+        const presignRes = await fetch("/api/v1/documents/upload-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filename: file.name,
+            content_type: file.type || "application/octet-stream",
+          }),
+        });
 
-      if (!presignRes.ok) {
-        const errData = await presignRes.json().catch(() => ({}));
-        throw new Error(errData.error || "Impossible d'obtenir l'URL d'upload pré-signée");
-      }
+        if (!presignRes.ok) {
+          const errData = await presignRes.json().catch(() => ({}));
+          throw new Error(errData.error || `Erreur d'autorisation pour "${file.name}"`);
+        }
 
-      const { upload_url } = await presignRes.json();
-      setUploadStatusText(`Téléversement direct vers LocalStack S3 (0%)...`);
+        const { upload_url } = await presignRes.json();
 
-      // 2. Upload direct S3 via XMLHttpRequest avec écoute de progression
-      await new Promise<void>((resolve, reject) => {
+        // 2. Upload direct vers S3 via XMLHttpRequest avec écoute de progression
         const xhr = new XMLHttpRequest();
 
         xhr.upload.onprogress = (event) => {
           if (event.lengthComputable) {
             const percentComplete = Math.round((event.loaded / event.total) * 100);
             setUploadProgress(percentComplete);
-            setUploadStatusText(`Téléversement direct vers LocalStack S3 (${percentComplete}%)...`);
+            setUploadStatusText(
+              totalFiles > 1 
+                ? `[${fileIndex}/${totalFiles}] Téléversement de "${file.name}" (${percentComplete}%)...`
+                : `Téléversement direct vers LocalStack S3 (${percentComplete}%)...`
+            );
           }
         };
 
@@ -97,22 +106,41 @@ export default function Home() {
           if (xhr.status >= 200 && xhr.status < 300) {
             resolve();
           } else {
-            reject(new Error(`Échec du transfert vers le bucket S3 (HTTP ${xhr.status})`));
+            reject(new Error(`Échec du transfert S3 pour "${file.name}" (HTTP ${xhr.status})`));
           }
         };
 
         xhr.onerror = () => {
-          reject(new Error("Erreur réseau lors du téléversement vers S3"));
+          reject(new Error(`Erreur réseau lors du téléversement de "${file.name}" vers S3`));
         };
 
         xhr.open("PUT", upload_url, true);
         xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
         xhr.send(file);
-      });
+      } catch (err) {
+        reject(err);
+      }
+    });
+  };
+
+  // Téléversement multi-fichiers par lot
+  const handleFilesUpload = async (files: File[]) => {
+    try {
+      setIsUploading(true);
+      setUploadProgress(0);
+      setStatusMessage(null);
+
+      let successCount = 0;
+      for (let i = 0; i < files.length; i++) {
+        await uploadSingleFile(files[i], i + 1, files.length);
+        successCount++;
+      }
 
       setStatusMessage({
         type: "success",
-        text: `Fichier "${file.name}" stocké avec succès dans le coffre-fort S3 !`,
+        text: files.length === 1 
+          ? `Fichier "${files[0].name}" stocké avec succès dans le coffre-fort S3 !`
+          : `${successCount} fichiers stockés avec succès dans le coffre-fort S3 !`,
       });
       fetchDocuments();
     } catch (err: any) {
@@ -128,7 +156,7 @@ export default function Home() {
     }
   };
 
-  // Déclenchement de la suppression après confirmation dans la modale
+  // Suppression après confirmation
   const handleDeleteConfirm = async () => {
     if (!selectedDocForDelete) return;
 
@@ -140,21 +168,20 @@ export default function Home() {
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `Erreur lors de la suppression (HTTP ${res.status})`);
+        throw new Error(errData.error || `Erreur HTTP ${res.status}`);
       }
 
       setStatusMessage({
         type: "success",
-        text: `Document "${selectedDocForDelete.filename}" supprimé avec succès de S3.`,
+        text: `Document "${selectedDocForDelete.filename}" supprimé du coffre-fort S3 avec succès.`,
       });
-      setIsDeleteModalOpen(false);
-      setSelectedDocForDelete(null);
+      closeDeleteModal();
       fetchDocuments();
     } catch (err: any) {
       console.error("Delete failed:", err);
       setStatusMessage({
         type: "error",
-        text: err.message || "Échec de la suppression du document",
+        text: err.message || "Impossible de supprimer le document",
       });
     } finally {
       setIsDeleting(false);
@@ -181,6 +208,16 @@ export default function Home() {
   const closeShareModal = () => {
     setIsShareModalOpen(false);
     setSelectedDocForShare(null);
+  };
+
+  const openPreviewModal = (doc: DocumentItem) => {
+    setSelectedDocForPreview(doc);
+    setIsPreviewModalOpen(true);
+  };
+
+  const closePreviewModal = () => {
+    setIsPreviewModalOpen(false);
+    setSelectedDocForPreview(null);
   };
 
   return (
@@ -250,23 +287,32 @@ export default function Home() {
           </div>
         )}
 
-        {/* Drag & Drop Zone Modulaire avec Progression Réelle */}
+        {/* Drag & Drop Zone Multi-fichiers avec Progression Réelle */}
         <UploadDropzone
-          onFileUpload={handleFileUpload}
+          onFilesUpload={handleFilesUpload}
           isUploading={isUploading}
           uploadProgress={uploadProgress}
           uploadStatusText={uploadStatusText}
+          onErrorNotification={(msg) => setStatusMessage({ type: "error", text: msg })}
         />
 
-        {/* Tableau des Documents avec Boutons Télécharger & Supprimer */}
+        {/* Tableau des Documents avec Recherche, Aperçu, Partage, Téléchargement et Suppression */}
         <DocumentList
           documents={documents}
           loading={loading}
           onRefresh={fetchDocuments}
           onDeleteClick={openDeleteModal}
           onShareClick={openShareModal}
+          onPreviewClick={openPreviewModal}
         />
       </div>
+
+      {/* Modale d'Aperçu Sécurisé */}
+      <PreviewModal
+        isOpen={isPreviewModalOpen}
+        document={selectedDocForPreview}
+        onClose={closePreviewModal}
+      />
 
       {/* Modale de Partage Temporaire Sécurisé */}
       <ShareModal

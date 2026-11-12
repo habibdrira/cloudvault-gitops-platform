@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
-import { FileText, Download, Trash2, RefreshCw, Share2 } from "lucide-react";
+import React, { useState, useMemo } from "react";
+import { FileText, Download, Trash2, RefreshCw, Share2, Eye, Search } from "lucide-react";
 import { DocumentItem } from "../types/document";
 
 interface DocumentListProps {
@@ -10,6 +10,7 @@ interface DocumentListProps {
   onRefresh: () => void;
   onDeleteClick: (doc: DocumentItem) => void;
   onShareClick: (doc: DocumentItem) => void;
+  onPreviewClick: (doc: DocumentItem) => void;
 }
 
 export const DocumentList: React.FC<DocumentListProps> = ({
@@ -18,7 +19,10 @@ export const DocumentList: React.FC<DocumentListProps> = ({
   onRefresh,
   onDeleteClick,
   onShareClick,
+  onPreviewClick,
 }) => {
+  const [searchQuery, setSearchQuery] = useState<string>("");
+
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return "0 Octet";
     const k = 1024;
@@ -41,21 +45,52 @@ export const DocumentList: React.FC<DocumentListProps> = ({
     }
   };
 
+  const filteredDocuments = useMemo(() => {
+    if (!searchQuery.trim()) return documents;
+    const query = searchQuery.toLowerCase().trim();
+    return documents.filter(
+      (doc) =>
+        doc.filename.toLowerCase().includes(query) ||
+        doc.key.toLowerCase().includes(query)
+    );
+  }, [documents, searchQuery]);
+
   return (
     <div className="mt-10">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-slate-200 flex items-center gap-2">
-          <FileText className="w-5 h-5 text-cyan-400" />
-          Répertoire des documents sécurisés
-        </h2>
-        <button
-          onClick={onRefresh}
-          disabled={loading}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-          Actualiser
-        </button>
+      {/* Header and Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-slate-200 flex items-center gap-2">
+            <FileText className="w-5 h-5 text-cyan-400" />
+            Répertoire des documents sécurisés
+          </h2>
+          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700/80">
+            {filteredDocuments.length} / {documents.length}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Search bar */}
+          <div className="relative flex-1 sm:w-64">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Rechercher un document..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50"
+            />
+          </div>
+
+          <button
+            onClick={onRefresh}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors disabled:opacity-50 flex-shrink-0"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+            Actualiser
+          </button>
+        </div>
       </div>
 
       <div className="rounded-xl border border-slate-800 bg-slate-900/50 overflow-hidden shadow-lg">
@@ -67,6 +102,10 @@ export const DocumentList: React.FC<DocumentListProps> = ({
         ) : documents.length === 0 ? (
           <div className="p-10 text-center text-slate-500 text-sm">
             Aucun document n'a encore été stocké dans le coffre-fort.
+          </div>
+        ) : filteredDocuments.length === 0 ? (
+          <div className="p-10 text-center text-slate-500 text-sm">
+            Aucun document ne correspond à la recherche "{searchQuery}".
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -80,7 +119,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {documents.map((doc) => (
+                {filteredDocuments.map((doc) => (
                   <tr
                     key={doc.key}
                     className="hover:bg-slate-800/30 transition-colors group"
@@ -109,11 +148,22 @@ export const DocumentList: React.FC<DocumentListProps> = ({
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {/* Bouton Aperçu Sécurisé */}
+                        <button
+                          type="button"
+                          onClick={() => onPreviewClick(doc)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 text-xs font-medium transition-colors border border-sky-500/20"
+                          title="Visualiser le document"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          Aperçu
+                        </button>
+
                         {/* Bouton Partager Temporaire */}
                         <button
                           type="button"
                           onClick={() => onShareClick(doc)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 text-xs font-medium transition-colors border border-indigo-500/20"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 text-xs font-medium transition-colors border border-indigo-500/20"
                           title="Générer un lien de partage temporaire sécurisé"
                         >
                           <Share2 className="w-3.5 h-3.5" />
@@ -125,8 +175,8 @@ export const DocumentList: React.FC<DocumentListProps> = ({
                           href={doc.download_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          download
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 text-xs font-medium transition-colors border border-cyan-500/20"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 text-xs font-medium transition-colors border border-cyan-500/20"
+                          title="Télécharger le fichier sur votre machine"
                         >
                           <Download className="w-3.5 h-3.5" />
                           Télécharger
@@ -136,7 +186,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
                         <button
                           type="button"
                           onClick={() => onDeleteClick(doc)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-medium transition-colors border border-rose-500/20"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-medium transition-colors border border-rose-500/20"
                           title="Supprimer ce document"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
