@@ -25,10 +25,14 @@ func PrometheusMetrics(next http.Handler) http.Handler {
 
 		duration := time.Since(start)
 
-		// Normalisation de l'URI pour éviter l'explosion de cardinalité (ex: /api/v1/documents/{key})
+		// Normalisation de l'URI pour éviter l'explosion de cardinalité (ex: /api/v1/documents/{key} ou /api/v1/documents/{key}/share)
 		path := r.URL.Path
-		if strings.HasPrefix(path, "/api/v1/documents/") && len(path) > len("/api/v1/documents/") && !strings.HasSuffix(path, "upload-url") {
-			path = "/api/v1/documents/{key}"
+		if strings.HasPrefix(path, "/api/v1/documents/") && len(path) > len("/api/v1/documents/") {
+			if strings.HasSuffix(path, "/share") {
+				path = "/api/v1/documents/{key}/share"
+			} else if !strings.HasSuffix(path, "upload-url") {
+				path = "/api/v1/documents/{key}"
+			}
 		}
 
 		statusStr := strconv.Itoa(wrapper.statusCode)

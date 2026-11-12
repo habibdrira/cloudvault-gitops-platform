@@ -20,6 +20,10 @@ type MockDocumentStorage struct {
 	uploadURLResult  string
 	uploadURLErr     error
 	downloadURLResult string
+	shareURLResult   string
+	shareURLErr      error
+	lastSharedKey    string
+	lastSharedTTL    time.Duration
 	listResult       []domain.DocumentItem
 	listErr          error
 	deleteErr        error
@@ -39,6 +43,15 @@ func (m *MockDocumentStorage) GenerateUploadURL(ctx context.Context, objectKey s
 
 func (m *MockDocumentStorage) GenerateDownloadURL(ctx context.Context, objectKey string) (string, error) {
 	return m.downloadURLResult, nil
+}
+
+func (m *MockDocumentStorage) GenerateShareURL(ctx context.Context, objectKey string, expiration time.Duration) (string, error) {
+	m.lastSharedKey = objectKey
+	m.lastSharedTTL = expiration
+	if m.shareURLErr != nil {
+		return "", m.shareURLErr
+	}
+	return m.shareURLResult, nil
 }
 
 func (m *MockDocumentStorage) ListDocuments(ctx context.Context) ([]domain.DocumentItem, error) {
@@ -265,6 +278,74 @@ func TestDocumentHandler_DeleteDocument(t *testing.T) {
 		resp := w.Result()
 		if resp.StatusCode != http.StatusInternalServerError {
 			t.Fatalf("expected status 500, got %d", resp.StatusCode)
+		}
+	})
+}
+
+func TestDocumentHandler_ShareDocument(t *testing.T) {
+	cfg := testConfig()
+
+	t.Run("Valid 15 Minutes TTL", func(t *testing.T) {
+		mockStore := &MockDocumentStorage{
+			shareURLResult: "http://mock-s3/share/doc.pdf?expires=900",
+		}
+		h := NewDocumentHandler(mockStore, cfg)
+
+		payload := domain.ShareURLRequest{
+			ExpiresInMinutes: 15,
+		}
+		body, _ := json.Marshal(payload)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/documents/1700000000_doc.pdf/share", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+
+		h.HandleShareDocument(w, req)
+
+		resp := w.Result()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", resp.StatusCode)
+		}
+
+		var res domain.ShareURLResponse
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if res.ShareURL != mockStore.shareURLResult {
+			t.Errorf("expected share_url %s, got %s", mockStore.shareURLResult, res.ShareURL)
+		}
+		if res.ExpiresInSeconds != 900 {
+			t.Errorf("expected 900 seconds, got %d", res.ExpiresInSeconds)
+		}
+		if mockStore.lastSharedTTL != 15*time.Minute {
+			t.Errorf("expected storage TTL 15m, got %v", mockStore.lastSharedTTL)
+		}
+	})
+
+	t.Run("Reject Invalid TTL (45 Minutes)", func(t *testing.T) {
+		mockStore := &MockDocumentStorage{}
+		h := NewDocumentHandler(mockStore, cfg)
+
+		payload := domain.ShareURLRequest{
+			ExpiresInMinutes: 45,
+		}
+		body, _ := json.Marshal(payload)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/documents/1700000000_doc.pdf/share", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+
+		h.HandleShareDocument(w, req)
+
+		resp := w.Result()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("expected status 400 for invalid TTL, got %d", resp.StatusCode)
+		}
+
+		var errRes domain.ErrorResponse
+		if err := json.NewDecoder(resp.Body).Decode(&errRes); err != nil {
+			t.Fatalf("failed to decode error response: %v", err)
+		}
+		if errRes.Code != "INVALID_SHARE_TTL" {
+			t.Errorf("expected error code INVALID_SHARE_TTL, got %s", errRes.Code)
 		}
 	})
 }

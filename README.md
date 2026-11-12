@@ -185,19 +185,26 @@ Mesures auditées en conditions réelles sur le cluster :
 - 3 machines virtuelles Ubuntu 22.04 LTS configurées sur `192.168.100.10`, `192.168.100.20`, `192.168.100.21` avec accès SSH sans mot de passe pour l'utilisateur `ubuntu`.
 - Station de contrôle WSL2 avec `ansible`, `terraform`, `kubectl`, `python3` et `curl`.
 
-### Étape 1 : Déploiement du Socle Système & Cluster (Ansible)
+### Étape 1 : Automatisation Zero-Touch via Makefile
+La plateforme fournit un point d'entrée universel pour orchestrer l'ensemble des opérations :
 ```bash
-ansible-playbook -i ansible/inventory/hosts.ini ansible/site.yml
+# 1. Déploiement complet des nœuds et des services via Ansible
+make bootstrap
+
+# 2. Déploiement déclaratif de l'IaC Terraform conteneurisée (hashicorp/terraform:1.9)
+make tf-apply
+
+# 3. Analyse de sécurité DevSecOps Trivy locale (IaC & configurations)
+make scan
+
+# 4. Exécution des tests unitaires Go avec détection de concurrence (-race -cover)
+make test
+
+# 5. Validation automatisée de bout en bout
+make demo
 ```
 
-### Étape 2 : Déploiement Déclaratif du Stockage Cloud (Terraform)
-```bash
-cd infra-services/terraform
-terraform init && terraform apply -auto-approve
-cd ../..
-```
-
-### Étape 3 : Bootstrap des Applications GitOps (Argo CD)
+### Étape 2 : Bootstrap des Applications GitOps (Argo CD)
 ```bash
 # 1. Déploiement de l'Ingress NGINX
 kubectl --kubeconfig=./kubeconfig apply -f k8s/infrastructure/ingress-controller-app.yaml
@@ -251,21 +258,22 @@ python3 tests/verify_observability.py
 cloudvault-gitops-platform/
 ├── .github/
 │   └── workflows/
-│       └── ci.yml            # Pipeline CI/CD automatisé (Backend, Frontend, IaC/K8s)
-├── ansible/                  # Automatisation Ansible multi-nœuds (K3s, Docker, Argo CD)
+│       └── ci.yml            # Pipeline CI/CD DevSecOps (Backend, Frontend, IaC/K8s & Trivy Scan)
+├── Makefile                  # Point d'entrée Zero-Touch (make bootstrap, tf-apply, scan, test, demo)
+├── ansible/                  # Automatisation Ansible multi-nœuds (K3s, Docker, LocalStack, Terraform)
 ├── apps/
-│   ├── backend/              # Microservice Go 1.23 (Clean Arch, slog, Prometheus, Distroless)
+│   ├── backend/              # Microservice Go 1.23 (Clean Arch, Presigned URLs, Partage 15m/1h/24h)
 │   │   ├── cmd/server/       # Point d'entrée du serveur HTTP
 │   │   └── internal/         # Packages config, domain, storage, handlers, middleware, metrics
-│   └── frontend/             # Application Next.js 14 (Composants modulaires, XHR Progress)
+│   └── frontend/             # Application Next.js 14 (Composants modulaires, XHR Progress, ShareModal)
 │       └── src/
-│           ├── components/   # UploadDropzone, DocumentList, DeleteModal, ProgressBar
+│           ├── components/   # UploadDropzone, DocumentList, DeleteModal, ShareModal, ProgressBar
 │           └── types/        # Types TypeScript
 ├── infra-services/
 │   ├── localstack/           # Docker Compose & boot hook persistant init-s3.sh
-│   └── terraform/            # Configuration déclarative S3 & IAM
+│   └── terraform/            # Configuration déclarative S3 (Versioning, FinOps Lifecycle) & IAM
 ├── k8s/                      # Manifestes Kubernetes déclaratifs gérés par Argo CD
-│   ├── apps/                 # Déploiements backend, frontend, Ingress et ServiceMonitor
+│   ├── apps/                 # Déploiements, Secrets S3, NetworkPolicies Zero-Trust et Ingress
 │   ├── infrastructure/       # Ingress NGINX et Applications Argo CD monitoring
 │   │   └── monitoring/       # monitoring-stack.yaml et monitoring-dashboards-app.yaml
 │   ├── monitoring/
@@ -275,6 +283,7 @@ cloudvault-gitops-platform/
 │   └── demo-e2e.sh
 └── tests/                    # Suites de tests automatisés Python et Bash
     ├── test_crud_complete.py # Validation CRUD DELETE et protection MIME
+    ├── test_share_url.sh     # Validation du partage temporaire et téléchargement
     ├── verify_observability.py # Audit API Grafana et Prometheus
     └── validate_k8s_yaml.py  # Contrôleur syntaxique YAML des manifests
 ```

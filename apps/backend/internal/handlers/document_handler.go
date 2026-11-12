@@ -153,3 +153,62 @@ func (h *DocumentHandler) HandleDeleteDocument(w http.ResponseWriter, r *http.Re
 	})
 }
 
+// POST /api/v1/documents/{key}/share
+func (h *DocumentHandler) HandleShareDocument(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		_ = json.NewEncoder(w).Encode(domain.ErrorResponse{Error: "Method not allowed"})
+		return
+	}
+
+	key := r.PathValue("key")
+	if key == "" {
+		p := strings.TrimPrefix(r.URL.Path, "/api/v1/documents/")
+		key = strings.TrimSuffix(p, "/share")
+	}
+	key = strings.TrimSpace(key)
+
+	if key == "" || key == "/api/v1/documents" {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(domain.ErrorResponse{Error: "document key is required in URL path"})
+		return
+	}
+
+	var req domain.ShareURLRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(domain.ErrorResponse{Error: "Invalid JSON request body"})
+		return
+	}
+
+	if req.ExpiresInMinutes != 15 && req.ExpiresInMinutes != 60 && req.ExpiresInMinutes != 1440 {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(domain.ErrorResponse{
+			Error: domain.ErrInvalidShareTTL.Error(),
+			Code:  "INVALID_SHARE_TTL",
+		})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	shareURL, err := h.storage.GenerateShareURL(ctx, key, time.Duration(req.ExpiresInMinutes)*time.Minute)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(domain.ErrorResponse{Error: "Failed to generate presigned share URL"})
+		return
+	}
+
+	resp := domain.ShareURLResponse{
+		ShareURL:         shareURL,
+		Key:              key,
+		ExpiresInSeconds: req.ExpiresInMinutes * 60,
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+

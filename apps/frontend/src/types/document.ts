@@ -4,6 +4,8 @@ export interface DocumentItem {
   size: number;
   last_modified: string;
   download_url: string;
+  version_id?: string;
+  is_latest?: boolean;
 }
 
 export interface StatusMessage {
@@ -11,3 +13,8 @@ export interface StatusMessage {
   text: string;
 }
 
+export interface ShareResponse {
+  share_url: string;
+  key: string;
+  expires_in_seconds: number;
+}

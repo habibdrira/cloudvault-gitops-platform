@@ -14,6 +14,7 @@ import { DocumentItem, StatusMessage } from "../types/document";
 import { UploadDropzone } from "../components/UploadDropzone";
 import { DocumentList } from "../components/DocumentList";
 import { DeleteModal } from "../components/DeleteModal";
+import { ShareModal } from "../components/ShareModal";
 
 export default function Home() {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
@@ -28,6 +29,10 @@ export default function Home() {
   const [selectedDocForDelete, setSelectedDocForDelete] = useState<DocumentItem | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
+  // États de la modale de partage temporaire
+  const [selectedDocForShare, setSelectedDocForShare] = useState<DocumentItem | null>(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
 
   // Notifications
   const [statusMessage, setStatusMessage] = useState<StatusMessage | null>(null);
@@ -168,6 +173,16 @@ export default function Home() {
     }
   };
 
+  const openShareModal = (doc: DocumentItem) => {
+    setSelectedDocForShare(doc);
+    setIsShareModalOpen(true);
+  };
+
+  const closeShareModal = () => {
+    setIsShareModalOpen(false);
+    setSelectedDocForShare(null);
+  };
+
   return (
     <main className="min-h-screen bg-slate-950 p-6 md:p-12 text-slate-100">
       <div className="max-w-6xl mx-auto mb-8">
@@ -249,8 +264,16 @@ export default function Home() {
           loading={loading}
           onRefresh={fetchDocuments}
           onDeleteClick={openDeleteModal}
+          onShareClick={openShareModal}
         />
       </div>
+
+      {/* Modale de Partage Temporaire Sécurisé */}
+      <ShareModal
+        isOpen={isShareModalOpen}
+        document={selectedDocForShare}
+        onClose={closeShareModal}
+      />
 
       {/* Modale de Confirmation de Suppression */}
       <DeleteModal

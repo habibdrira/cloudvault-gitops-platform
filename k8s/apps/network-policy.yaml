@@ -1,0 +1,111 @@
+# ==============================================================================
+# CloudVault GitOps Platform — Zero-Trust Network Policies
+# ==============================================================================
+# Namespace : cloudvault
+# Objectifs :
+#   - Verrouillage par défaut (Default Deny Ingress)
+#   - Autorisation Ingress-NGINX, réseau de nœuds VMnet8 et Pods vers Frontend (3000) et Backend (8080)
+#   - Autorisation Monitoring (Prometheus) vers Backend (8080)
+#   - Restriction Egress Backend vers LocalStack S3 (192.168.100.10:4566) & DNS (53)
+# ==============================================================================
+
+# 1. Verrouillage systématique des flux entrants par défaut
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: cloudvault
+  labels:
+    app.kubernetes.io/name: default-deny-ingress
+    app.kubernetes.io/part-of: cloudvault-platform
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+
+---
+# 2. Autorisation d'accès depuis le contrôleur Ingress NGINX et le réseau du cluster
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-nginx
+  namespace: cloudvault
+  labels:
+    app.kubernetes.io/name: allow-ingress-nginx
+    app.kubernetes.io/part-of: cloudvault-platform
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - ipBlock:
+            cidr: 192.168.100.0/24
+        - ipBlock:
+            cidr: 10.42.0.0/16
+      ports:
+        - protocol: TCP
+          port: 3000
+        - protocol: TCP
+          port: 8080
+
+---
+# 3. Autorisation de scraping des métriques par Prometheus (monitoring)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-backend
+  namespace: cloudvault
+  labels:
+    app.kubernetes.io/name: allow-monitoring-backend
+    app.kubernetes.io/part-of: cloudvault-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: cloudvault-backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8080
+
+---
+# 4. Restriction stricte des flux sortants (Egress) du Backend CloudVault
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-egress-policy
+  namespace: cloudvault
+  labels:
+    app.kubernetes.io/name: backend-egress-policy
+    app.kubernetes.io/part-of: cloudvault-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: cloudvault-backend
+  policyTypes:
+    - Egress
+  egress:
+    # Résolution DNS interne (CoreDNS)
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Communication S3 / LocalStack Gateway sur infra-node
+    - to:
+        - ipBlock:
+            cidr: 192.168.100.10/32
+      ports:
+        - protocol: TCP
+          port: 4566

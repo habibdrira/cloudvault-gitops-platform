@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { FileText, Download, Trash2, RefreshCw } from "lucide-react";
+import { FileText, Download, Trash2, RefreshCw, Share2 } from "lucide-react";
 import { DocumentItem } from "../types/document";
 
 interface DocumentListProps {
@@ -9,6 +9,7 @@ interface DocumentListProps {
   loading: boolean;
   onRefresh: () => void;
   onDeleteClick: (doc: DocumentItem) => void;
+  onShareClick: (doc: DocumentItem) => void;
 }
 
 export const DocumentList: React.FC<DocumentListProps> = ({
@@ -16,6 +17,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
   loading,
   onRefresh,
   onDeleteClick,
+  onShareClick,
 }) => {
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return "0 Octet";
@@ -88,6 +90,16 @@ export const DocumentList: React.FC<DocumentListProps> = ({
                       <span className="truncate max-w-xs md:max-w-md" title={doc.filename}>
                         {doc.filename}
                       </span>
+                      {/* Badge de Version S3 FinOps */}
+                      {doc.version_id ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-cyan-950/60 text-cyan-400 border border-cyan-500/30" title={`Version S3: ${doc.version_id}`}>
+                          v{doc.version_id.length > 8 ? doc.version_id.slice(0, 8) : doc.version_id}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-slate-800 text-slate-400 border border-slate-700">
+                          v1
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-slate-400 text-xs">
                       {formatBytes(doc.size)}
@@ -97,6 +109,17 @@ export const DocumentList: React.FC<DocumentListProps> = ({
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {/* Bouton Partager Temporaire */}
+                        <button
+                          type="button"
+                          onClick={() => onShareClick(doc)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 text-xs font-medium transition-colors border border-indigo-500/20"
+                          title="Générer un lien de partage temporaire sécurisé"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                          Partager
+                        </button>
+
                         {/* Bouton Télécharger */}
                         <a
                           href={doc.download_url}
@@ -131,4 +154,3 @@ export const DocumentList: React.FC<DocumentListProps> = ({
     </div>
   );
 };
-

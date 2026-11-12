@@ -25,10 +25,44 @@ resource "aws_s3_bucket_public_access_block" "documents" {
   restrict_public_buckets = false
 }
 
-# 3. Politique IAM autorisant les opérations PutObject et GetObject (pour URLs pré-signées)
+# 3. Activation du Versioning S3 (Résilience & Traçabilité FinOps)
+resource "aws_s3_bucket_versioning" "documents" {
+  bucket = aws_s3_bucket.documents.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# 4. Règles FinOps d'optimisation du cycle de vie du stockage
+resource "aws_s3_bucket_lifecycle_configuration" "documents" {
+  bucket = aws_s3_bucket.documents.id
+
+  rule {
+    id     = "finops-noncurrent-version-cleanup"
+    status = "Enabled"
+
+    filter {
+      prefix = ""
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [transition_default_minimum_object_size]
+  }
+}
+
+# 5. Politique IAM autorisant les opérations PutObject, GetObject et gestion de versions
 resource "aws_iam_policy" "cloudvault_s3_rw" {
   name        = "cloudvault-s3-readwrite-policy"
-  description = "Politique IAM accordant l'accès PutObject et GetObject au bucket CloudVault"
+  description = "Politique IAM accordant l'accès S3 complet au bucket CloudVault"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -38,6 +72,7 @@ resource "aws_iam_policy" "cloudvault_s3_rw" {
         Effect = "Allow"
         Action = [
           "s3:ListBucket",
+          "s3:ListBucketVersions",
           "s3:GetBucketLocation"
         ]
         Resource = aws_s3_bucket.documents.arn
@@ -48,7 +83,9 @@ resource "aws_iam_policy" "cloudvault_s3_rw" {
         Action = [
           "s3:PutObject",
           "s3:GetObject",
-          "s3:DeleteObject"
+          "s3:GetObjectVersion",
+          "s3:DeleteObject",
+          "s3:DeleteObjectVersion"
         ]
         Resource = "${aws_s3_bucket.documents.arn}/*"
       }
@@ -56,7 +93,7 @@ resource "aws_iam_policy" "cloudvault_s3_rw" {
   })
 }
 
-# 4. Rôle IAM pour le microservice backend CloudVault
+# 6. Rôle IAM pour le microservice backend CloudVault
 resource "aws_iam_role" "cloudvault_app" {
   name = "cloudvault-backend-role"
 
@@ -74,9 +111,8 @@ resource "aws_iam_role" "cloudvault_app" {
   })
 }
 
-# 5. Attachement de la politique au rôle applicatif
+# 7. Attachement de la politique au rôle applicatif
 resource "aws_iam_role_policy_attachment" "cloudvault_attach" {
   role       = aws_iam_role.cloudvault_app.name
   policy_arn = aws_iam_policy.cloudvault_s3_rw.arn
 }
-

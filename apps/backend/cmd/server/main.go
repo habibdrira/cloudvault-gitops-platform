@@ -58,6 +58,7 @@ func main() {
 	mux.HandleFunc("POST /api/v1/documents/upload-url", docHandler.HandleGenerateUploadURL)
 	mux.HandleFunc("GET /api/v1/documents", docHandler.HandleListDocuments)
 	mux.HandleFunc("DELETE /api/v1/documents/{key}", docHandler.HandleDeleteDocument)
+	mux.HandleFunc("POST /api/v1/documents/{key}/share", docHandler.HandleShareDocument)
 
 	// Métriques Prometheus SRE
 	mux.Handle("GET /metrics", promhttp.Handler())

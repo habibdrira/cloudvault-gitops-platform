@@ -102,21 +102,42 @@ func (s *S3Storage) GenerateDownloadURL(ctx context.Context, objectKey string) (
 	return presignedReq.URL, nil
 }
 
+func (s *S3Storage) GenerateShareURL(ctx context.Context, objectKey string, expiration time.Duration) (string, error) {
+	start := time.Now()
+	presignedReq, err := s.presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.cfg.BucketName),
+		Key:    aws.String(objectKey),
+	}, func(opts *s3.PresignOptions) {
+		opts.Expires = expiration
+	})
+	duration := time.Since(start)
+	if err != nil {
+		metrics.RecordS3Operation("presign_share", "error", duration)
+		return "", fmt.Errorf("PresignGetObject share error: %w", err)
+	}
+	metrics.RecordS3Operation("presign_share", "success", duration)
+	return presignedReq.URL, nil
+}
+
 func (s *S3Storage) ListDocuments(ctx context.Context) ([]domain.DocumentItem, error) {
 	start := time.Now()
-	output, err := s.client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
+	output, err := s.client.ListObjectVersions(ctx, &s3.ListObjectVersionsInput{
 		Bucket: aws.String(s.cfg.BucketName),
 	})
 	duration := time.Since(start)
 	if err != nil {
 		metrics.RecordS3Operation("list_objects", "error", duration)
-		return nil, fmt.Errorf("ListObjectsV2 error: %w", err)
+		return nil, fmt.Errorf("ListObjectVersions error: %w", err)
 	}
 	metrics.RecordS3Operation("list_objects", "success", duration)
 
 	var documents []domain.DocumentItem
-	for _, item := range output.Contents {
-		key := aws.ToString(item.Key)
+	for _, version := range output.Versions {
+		if !aws.ToBool(version.IsLatest) {
+			continue
+		}
+
+		key := aws.ToString(version.Key)
 		parts := strings.SplitN(key, "_", 2)
 		origFilename := key
 		if len(parts) == 2 {
@@ -126,12 +147,19 @@ func (s *S3Storage) ListDocuments(ctx context.Context) ([]domain.DocumentItem, e
 
 		downloadURL, _ := s.GenerateDownloadURL(ctx, key)
 
+		versionID := aws.ToString(version.VersionId)
+		if versionID == "null" {
+			versionID = ""
+		}
+
 		documents = append(documents, domain.DocumentItem{
 			Key:          key,
 			Filename:     origFilename,
-			Size:         aws.ToInt64(item.Size),
-			LastModified: aws.ToTime(item.LastModified),
+			Size:         aws.ToInt64(version.Size),
+			LastModified: aws.ToTime(version.LastModified),
 			DownloadURL:  downloadURL,
+			VersionID:    versionID,
+			IsLatest:     aws.ToBool(version.IsLatest),
 		})
 	}
 
@@ -155,4 +183,3 @@ func (s *S3Storage) DeleteDocument(ctx context.Context, objectKey string) error 
 	metrics.RecordS3Operation("delete_object", "success", duration)
 	return nil
 }
-
