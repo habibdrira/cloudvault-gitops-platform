@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"cloudvault-backend/internal/config"
 	"cloudvault-backend/internal/handlers"
 	"cloudvault-backend/internal/middleware"
@@ -57,12 +59,16 @@ func main() {
 	mux.HandleFunc("GET /api/v1/documents", docHandler.HandleListDocuments)
 	mux.HandleFunc("DELETE /api/v1/documents/{key}", docHandler.HandleDeleteDocument)
 
+	// Métriques Prometheus SRE
+	mux.Handle("GET /metrics", promhttp.Handler())
+	mux.Handle("/metrics", promhttp.Handler())
+
 	// Fallback pour anciens routeurs ou paths préfixés
 	mux.HandleFunc("/healthz", healthHandler.HandleHealthz)
 	mux.HandleFunc("/readyz", healthHandler.HandleReadyz)
 
-	// 6. Chaînage des middlewares : Logger structuré + CORS
-	handler := middleware.RequestLogger(middleware.CORS(mux))
+	// 6. Chaînage des middlewares : Logger structuré + Prometheus Metrics + CORS
+	handler := middleware.RequestLogger(middleware.PrometheusMetrics(middleware.CORS(mux)))
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,

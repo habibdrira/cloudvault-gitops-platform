@@ -14,6 +14,7 @@ import (
 
 	"cloudvault-backend/internal/config"
 	"cloudvault-backend/internal/domain"
+	"cloudvault-backend/internal/metrics"
 )
 
 type S3Storage struct {
@@ -71,6 +72,7 @@ func (s *S3Storage) CheckHealth(ctx context.Context) error {
 }
 
 func (s *S3Storage) GenerateUploadURL(ctx context.Context, objectKey string, contentType string) (string, error) {
+	start := time.Now()
 	presignedReq, err := s.presignClient.PresignPutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(s.cfg.BucketName),
 		Key:         aws.String(objectKey),
@@ -78,9 +80,12 @@ func (s *S3Storage) GenerateUploadURL(ctx context.Context, objectKey string, con
 	}, func(opts *s3.PresignOptions) {
 		opts.Expires = 15 * time.Minute
 	})
+	duration := time.Since(start)
 	if err != nil {
+		metrics.RecordS3Operation("presign_put", "error", duration)
 		return "", fmt.Errorf("PresignPutObject error: %w", err)
 	}
+	metrics.RecordS3Operation("presign_put", "success", duration)
 	return presignedReq.URL, nil
 }
 
@@ -98,12 +103,16 @@ func (s *S3Storage) GenerateDownloadURL(ctx context.Context, objectKey string) (
 }
 
 func (s *S3Storage) ListDocuments(ctx context.Context) ([]domain.DocumentItem, error) {
+	start := time.Now()
 	output, err := s.client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
 		Bucket: aws.String(s.cfg.BucketName),
 	})
+	duration := time.Since(start)
 	if err != nil {
+		metrics.RecordS3Operation("list_objects", "error", duration)
 		return nil, fmt.Errorf("ListObjectsV2 error: %w", err)
 	}
+	metrics.RecordS3Operation("list_objects", "success", duration)
 
 	var documents []domain.DocumentItem
 	for _, item := range output.Contents {
@@ -133,13 +142,17 @@ func (s *S3Storage) ListDocuments(ctx context.Context) ([]domain.DocumentItem, e
 }
 
 func (s *S3Storage) DeleteDocument(ctx context.Context, objectKey string) error {
+	start := time.Now()
 	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(s.cfg.BucketName),
 		Key:    aws.String(objectKey),
 	})
+	duration := time.Since(start)
 	if err != nil {
+		metrics.RecordS3Operation("delete_object", "error", duration)
 		return fmt.Errorf("DeleteObject error for key %s: %w", objectKey, err)
 	}
+	metrics.RecordS3Operation("delete_object", "success", duration)
 	return nil
 }
 
