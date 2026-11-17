@@ -7,17 +7,18 @@ export PATH := $(HOME)/.local/bin:$(PATH)
 PWD := $(shell pwd)
 REMOTE_HOST ?= ubuntu@192.168.100.10
 
-.PHONY: all bootstrap tf-apply scan test demo help
+.PHONY: all bootstrap tf-apply scan test demo devops-demo help
 
 all: help
 
 help:
 	@echo "CloudVault GitOps Platform - Commandes disponibles :"
-	@echo "  make bootstrap  - Exécute le playbook Ansible global (bootstrap)"
-	@echo "  make tf-apply   - Déploie l'IaC Terraform conteneurisée (hashicorp/terraform:1.9)"
-	@echo "  make scan       - Analyse de sécurité DevSecOps Trivy locale"
-	@echo "  make test       - Exécute les tests unitaires et de concurrence Go (-race -cover)"
-	@echo "  make demo       - Exécute la validation E2E automatisée (demo-e2e.sh)"
+	@echo "  make bootstrap    - Exécute le playbook Ansible global (bootstrap)"
+	@echo "  make tf-apply     - Déploie l'IaC Terraform conteneurisée (hashicorp/terraform:1.9)"
+	@echo "  make scan         - Analyse de sécurité DevSecOps Trivy locale"
+	@echo "  make test         - Exécute les tests unitaires et de concurrence Go (-race -cover)"
+	@echo "  make demo         - Exécute la validation E2E automatisée (demo-e2e.sh)"
+	@echo "  make devops-demo  - Exécute la démonstration DevOps live chronométrée (demo-devops-live.sh)"
 
 bootstrap:
 	ansible-playbook ansible/site.yml

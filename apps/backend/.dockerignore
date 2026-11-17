@@ -1,0 +1,9 @@
+.git
+.gitignore
+*.md
+coverage.out
+*.coverage
+*.test
+cloudvault-backend
+.env*
+scratch/

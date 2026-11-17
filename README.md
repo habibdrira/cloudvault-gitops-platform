@@ -1,6 +1,7 @@
 # CloudVault GitOps Platform 🛡️🚀
 
 [![CI/DevSecOps Status](https://github.com/habibdrira/cloudvault-gitops-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/habibdrira/cloudvault-gitops-platform/actions/workflows/ci.yml)
+[![Release v1.0.0](https://img.shields.io/badge/Release-v1.0.0-007EC6?logo=github&logoColor=white)](https://github.com/habibdrira/cloudvault-gitops-platform/releases/tag/v1.0.0)
 [![Go Version](https://img.shields.io/badge/Go-1.23-00ADD8?logo=go&logoColor=white)](https://golang.org)
 [![Next.js Version](https://img.shields.io/badge/Next.js-14-black?logo=nextdotjs&logoColor=white)](https://nextjs.org)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-K3s%20v1.31-326CE5?logo=kubernetes&logoColor=white)](https://k3s.io)
@@ -10,7 +11,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > **CloudVault** est une plateforme documentaire d'entreprise haute résilience, orchestrée selon les principes **GitOps & SRE de bout en bout**.  
-> Elle associe l'automatisation d'infrastructure (**Ansible & Terraform**), un cluster **Kubernetes K3s** multi-nœuds, la réconciliation continue par **Argo CD** (*App-of-Apps*), la sécurité **Zero-Trust** (Conteneurs Distroless, FS Read-Only, NetworkPolicies), une observabilité native (**Prometheus SRE Golden Signals & Grafana as Code**) et un stockage objet **AWS S3 FinOps**.
+> Elle associe l'automatisation d'infrastructure (**Ansible & Terraform**), un cluster **Kubernetes K3s** multi-nœuds, la réconciliation continue par **Argo CD** (*App-of-Apps*), la sécurité **Zero-Trust** (Conteneurs Distroless, FS Read-Only, NetworkPolicies, Trivy 0-CVE), une observabilité native (**Prometheus SRE Golden Signals & Grafana as Code**) et un stockage objet **AWS S3 FinOps**.
 
 ---
 
@@ -18,6 +19,7 @@
 
 - [🏛️ Architecture Globale & Flux de Données](#️-architecture-globale--flux-de-données)
 - [💎 Les 6 Piliers d'Excellence Technique (Gold Standard)](#-les-6-piliers-dexcellence-technique-gold-standard)
+- [📸 Vitrine Visuelle & Démonstration Live](#-vitrine-visuelle--démonstration-live)
 - [🚀 Quickstart & Commandes (Makefile)](#-quickstart--commandes-makefile)
 - [🌐 Points d'Accès de la Plateforme](#-points-daccès-de-la-plateforme)
 - [☁️ Production Evolution Roadmap (AWS EKS)](#️-production-evolution-roadmap-aws-eks)
@@ -29,6 +31,52 @@
 ## 🏛️ Architecture Globale & Flux de Données
 
 L'infrastructure s'étend sur un réseau virtuel privé dédié (`VMnet8 : 192.168.100.0/24`) piloté depuis une station de contrôle universelle (**WSL2, DevContainer ou VM dédiée**) :
+
+```mermaid
+flowchart TD
+    subgraph ControlStation["Control Station (WSL2 / DevBox)"]
+        Ansible["Ansible Automation"]
+        Terraform["Terraform 1.9 (S3 Backend)"]
+        Kubectl["Kubectl / Helm"]
+    end
+
+    subgraph Network["VMnet8 Private Network (192.168.100.0/24)"]
+        subgraph InfraNode["infra-node (192.168.100.10)"]
+            Docker["Docker Engine 27+"]
+            LocalStack["LocalStack 3.8 (AWS S3, IAM, STS)"]
+            S3State[("cloudvault-terraform-state")]
+            S3Docs[("cloudvault-documents (FinOps 30j)")]
+            LocalStack --> S3State
+            LocalStack --> S3Docs
+        end
+
+        subgraph K8sMaster["k8s-master (192.168.100.20)"]
+            K3sMaster["K3s Server (Control Plane)"]
+            IngressMaster["Ingress NGINX Controller (:80 / :443)"]
+            ArgoCD["Argo CD v2.12 (App-of-Apps Engine)"]
+            PromServer["Prometheus Server & Operator"]
+        end
+
+        subgraph K8sWorker["k8s-worker (192.168.100.21)"]
+            K3sAgent["K3s Agent (Data Plane)"]
+            IngressWorker["Ingress NGINX Controller (:80 / :443)"]
+            Frontend["cloudvault-frontend (Next.js 14)"]
+            Backend["cloudvault-backend (Go 1.23 Clean Arch)"]
+            Grafana["Grafana v11.3 (SRE Golden Signals)"]
+            HPA_BE["HPA (2-10 réplicas) + PDB"]
+            Backend --> HPA_BE
+        end
+    end
+
+    User(["Client / Navigateur"]) -->|cloudvault.local:80/443| IngressWorker
+    IngressWorker --> Frontend
+    Frontend -->|Demande URL Pré-signée| Backend
+    Backend -->|AWS SDK Go S3| LocalStack
+    User -->|Direct PUT/GET Chiffré S3| LocalStack
+    ArgoCD -->|Réconciliation continue| K8sWorker
+    Grafana -->|PromQL| PromServer
+    PromServer -->|Scrape /metrics| Backend
+```
 
 ```text
                                   +---------------------------------------+
@@ -85,6 +133,19 @@ L'infrastructure s'étend sur un réseau virtuel privé dédié (`VMnet8 : 192.1
 
 ---
 
+## 📸 Vitrine Visuelle & Démonstration Live
+
+Les captures d'écran et artefacts visuels haute définition sont répertoriés dans le dossier [`docs/screenshots/`](docs/screenshots/) :
+
+| Composant | Aperçu / Description | Chemin du Fichier |
+| :--- | :--- | :--- |
+| **Interface Web CloudVault** | UI Next.js 14, upload direct S3, progression XHR & modal de partage sécurisé. | [`docs/screenshots/cloudvault-ui-overview.png`](docs/screenshots/) |
+| **GitOps Argo CD (App-of-Apps)** | Arborescence déclarative montrant l'application racine et les 4 apps enfants *Synced & Healthy*. | [`docs/screenshots/argocd-app-of-apps.png`](docs/screenshots/) |
+| **Dashboard SRE Golden Signals** | Tableau de bord Grafana as Code (Latence P99, Taux d'erreurs, Requêtes/s, Métriques Go). | [`docs/screenshots/grafana-sre-golden-signals.png`](docs/screenshots/) |
+| **Audit DevSecOps Trivy** | Validation locale et CI/CD sans faille : 0 vulnérabilité critique et 0 misconfiguration. | [`docs/screenshots/trivy-zero-cve.png`](docs/screenshots/) |
+
+---
+
 ## 🚀 Quickstart & Commandes (`Makefile`)
 
 L'ensemble des opérations du cycle de vie de la plateforme est orchestré de manière standardisée et reproductible via le [`Makefile`](Makefile) :
@@ -93,16 +154,18 @@ L'ensemble des opérations du cycle de vie de la plateforme est orchestré de ma
 | :--- | :--- | :--- |
 | `make bootstrap` | Déploie l'infrastructure complète de zéro via Ansible (OS, Docker, LocalStack, K3s multi-nœuds, Argo CD) et initialise le provisionnement Terraform. | Nœuds opérationnels, cluster K3s prêt et applications Argo CD en cours de synchronisation. |
 | `make tf-apply` | Initialise et applique la configuration IaC Terraform conteneurisée avec stockage d'état distant (`s3://cloudvault-terraform-state/infra-services/terraform.tfstate`). | `No changes. Your infrastructure matches the configuration.` (Convergence 100 % idempotente). |
-| `make scan` | Lance l'audit de sécurité DevSecOps exhaustif avec Aqua Security Trivy sur les 13 cibles (Dockerfiles, manifestes Kubernetes, code Terraform). | `0 Misconfigurations (0 CRITICAL, 0 HIGH)`. |
-| `make test` | Exécute la suite complète de tests unitaires backend Go avec détecteur de concurrence mémoire et couverture de code (`go test -v -race -cover ./...`). | `PASS` avec 0 race condition détectée et couverture robuste. |
+| `make scan` | Lance l'audit de sécurité DevSecOps exhaustif avec Aqua Security Trivy sur les 36 cibles (Dockerfiles, manifestes Kubernetes, code Terraform). | `0 Misconfigurations (0 CRITICAL, 0 HIGH)`. |
+| `make test` | Exécute la suite complète de tests unitaires backend Go avec détecteur de concurrence mémoire et couverture de code (`go test -v -race -cover ./...`). | `PASS` avec 0 race condition détectée et couverture robuste (>70 %). |
 | `make demo` | Exécute le pipeline automatisé de vérification E2E (`scripts/demo-e2e.sh`) couvrant les sondes K8s, URLs pré-signées, upload S3, listing avec `version_id` et lien de partage temporaire. | `VALIDATION E2E RÉUSSIE AVEC SUCCÈS ! LA PLATEFORME EST CONFORME`. |
+| `make devops-demo` | Exécute la démonstration DevOps live chronométrée en 5 étapes (`scripts/demo-devops-live.sh`) : topologie Ansible, IaC Terraform, cluster K8s/HPA/PDB, Argo CD et pipeline E2E. | Démonstration complète validée pour présentations techniques & recruteurs. |
 
 ```bash
 # Workflow typique de validation complète :
-make test      # Validation du code backend & concurrence
-make scan      # Audit de sécurité DevSecOps zéro-défaut
-make tf-apply  # Vérification de l'alignement de l'infrastructure
-make demo      # Validation bout-en-bout en direct
+make test         # Validation du code backend & concurrence mémoire
+make scan         # Audit de sécurité DevSecOps zéro-défaut
+make tf-apply     # Vérification de l'alignement de l'infrastructure S3
+make demo         # Validation bout-en-bout en direct
+make devops-demo  # Démonstration DevOps live en 5 actes
 ```
 
 ---
@@ -141,11 +204,14 @@ L'architecture de CloudVault a été conçue pour une transposition directe et t
 cloudvault-gitops-platform/
 ├── .devcontainer/            # Environnement de contrôle universel multi-OS (Dockerfile + devcontainer.json)
 ├── .github/workflows/        # Pipeline CI/CD DevSecOps (Backend, Frontend, IaC/K8s, Trivy, golangci-lint)
-├── Makefile                  # Point d'entrée Zero-Touch (make bootstrap, tf-apply, scan, test, demo)
+├── Makefile                  # Point d'entrée Zero-Touch (bootstrap, tf-apply, scan, test, demo, devops-demo)
+├── ansible.cfg               # Configuration Ansible racine (inventaire par défaut sans paramètre -i)
 ├── ansible/                  # Automatisation Ansible multi-nœuds (K3s, Docker, LocalStack, Argo CD)
 ├── apps/
 │   ├── backend/              # Microservice Go 1.23 (Clean Arch, Presigned S3, Partage temporaire 15m/1h/24h)
 │   └── frontend/             # Application Next.js 14 (Composants modulaires, XHR Progress, ShareModal)
+├── docs/
+│   └── screenshots/          # Galerie visuelle de démonstration (Argo CD, Grafana SRE, CloudVault UI)
 ├── infra-services/
 │   ├── localstack/           # Docker Compose & hook de boot persistant init-s3.sh
 │   └── terraform/            # IaC S3 (Versioning, FinOps) & IAM avec Remote State S3 LocalStack
@@ -159,7 +225,7 @@ cloudvault-gitops-platform/
 │   ├── infrastructure/       # Ingress NGINX et stack d'observabilité Prometheus
 │   ├── monitoring/           # Dashboards Grafana as Code
 │   └── root-application.yaml # Application racine App-of-Apps (cloudvault-root-app)
-├── scripts/                  # Script de démonstration et validation E2E (demo-e2e.sh)
+├── scripts/                  # Scripts de démonstration live et validation E2E (demo-devops-live.sh, demo-e2e.sh)
 └── tests/                    # Suites de validation automatisées (CRUD, Partage, Observabilité, YAML)
 ```
 

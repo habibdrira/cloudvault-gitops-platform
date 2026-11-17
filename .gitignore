@@ -46,5 +46,12 @@ out/
 .env*.local
 *.tsbuildinfo
 
-# Go binaries
+# Go binaries & test artifacts
 apps/backend/cloudvault-backend
+coverage.out
+*.coverage
+*.test
+
+# Fichiers de démo temporaires
+demo-proof.txt
+demo-files/
