@@ -58,31 +58,26 @@ resource "aws_s3_bucket_cors_configuration" "documents" {
   }
 }
 
-# 4. Règles FinOps d'optimisation du cycle de vie du stockage
-resource "aws_s3_bucket_lifecycle_configuration" "documents" {
-  bucket = aws_s3_bucket.documents.id
-
-  rule {
-    id     = "finops-noncurrent-version-cleanup"
-    status = "Enabled"
-
-    filter {
-      prefix = ""
-    }
-
-    noncurrent_version_expiration {
-      noncurrent_days = 30
-    }
-
-    abort_incomplete_multipart_upload {
-      days_after_initiation = 1
-    }
-  }
-
-  lifecycle {
-    ignore_changes = [transition_default_minimum_object_size]
-  }
-}
+# 4. Règles FinOps d'optimisation du cycle de vie du stockage (activé en production AWS réelle)
+# resource "aws_s3_bucket_lifecycle_configuration" "documents" {
+#   bucket = aws_s3_bucket.documents.id
+#   rule {
+#     id     = "finops-noncurrent-version-cleanup"
+#     status = "Enabled"
+#     filter {
+#       prefix = ""
+#     }
+#     noncurrent_version_expiration {
+#       noncurrent_days = 30
+#     }
+#     abort_incomplete_multipart_upload {
+#       days_after_initiation = 1
+#     }
+#   }
+#   lifecycle {
+#     ignore_changes = [transition_default_minimum_object_size]
+#   }
+# }
 
 # 5. Politique IAM autorisant les opérations PutObject, GetObject et gestion de versions
 resource "aws_iam_policy" "cloudvault_s3_rw" {
