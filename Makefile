@@ -44,3 +44,7 @@ test:
 demo:
 	./scripts/demo-e2e.sh
 
+devops-demo:
+	./scripts/demo-devops-live.sh
+
+
